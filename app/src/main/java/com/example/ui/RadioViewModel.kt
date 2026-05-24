@@ -14,6 +14,7 @@ import com.example.data.RadioSettings
 import com.example.streaming.AacStreamer
 import com.example.streaming.StreamState
 import com.example.streaming.TtsManager
+import com.example.streaming.WavParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,8 +35,11 @@ class RadioViewModel(
     // Core streaming services
     private val aacStreamer = AacStreamer()
     private val ttsManager = TtsManager(application) { pcmData, sampleRate ->
-        // On PCM synthesized from TTS, queue it in the streamer
-        aacStreamer.queuePcm(pcmData)
+        // On PCM synthesized from TTS, resample to stream sample rate and queue in the streamer
+        val targetRate = aacStreamer.STREAM_SAMPLE_RATE
+        val resampled = WavParser.resample(pcmData, sampleRate, targetRate)
+        Log.d(TAG, "Queuing synthesized speech PCM segment: original size=${pcmData.size} at ${sampleRate}Hz, resampled size=${resampled.size} at ${targetRate}Hz")
+        aacStreamer.queuePcm(resampled)
     }
 
     // Monitoring playback player

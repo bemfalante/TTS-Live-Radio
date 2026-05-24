@@ -26,8 +26,6 @@ class TtsManager(
     private val _currentLocale = MutableStateFlow(Locale.US)
     val currentLocale = _currentLocale.asStateFlow()
 
-    private val tempSpeechFile = File(context.cacheDir, "tts_temp_broadcast.wav")
-
     init {
         tts = TextToSpeech(context.applicationContext, this)
     }
@@ -111,11 +109,20 @@ class TtsManager(
             override fun onDone(utteranceId: String?) {
                 Log.d(TAG, "TTS synthesis complete: $utteranceId")
                 if (utteranceId != null && utteranceId.startsWith("stream_")) {
-                    // Raw parsing and resampling triggered when complete
-                    val info = WavParser.parseWav(tempSpeechFile)
+                    val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
+                    val info = WavParser.parseWav(uniqueFile)
                     if (info != null && info.pcmShorts.isNotEmpty()) {
+                        Log.d(TAG, "Parsed WAV file successfully: $utteranceId, channels=${info.channels}, sampleRate=${info.sampleRate}, size=${info.pcmShorts.size}")
                         onPcmSynthesized(info.pcmShorts, info.sampleRate)
+                    } else {
+                        Log.e(TAG, "Failed or empty WAV file parsed for: $utteranceId, exists=${uniqueFile.exists()}, length=${uniqueFile.length()}")
                     }
+                    // Delete synthesized WAV file since it is already loaded in memory
+                    try {
+                        if (uniqueFile.exists()) {
+                            uniqueFile.delete()
+                        }
+                    } catch (ignored: Exception) {}
                 }
             }
 
@@ -152,14 +159,9 @@ class TtsManager(
             val params = Bundle()
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
 
-            // 1. Always Synthesize to file for the Icecast audio live stream
-            try {
-                if (tempSpeechFile.exists()) {
-                    tempSpeechFile.delete()
-                }
-            } catch (ignored: Exception) {}
-
-            engine.synthesizeToFile(text, params, tempSpeechFile, utteranceId)
+            val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
+            val result = engine.synthesizeToFile(text, params, uniqueFile, utteranceId)
+            Log.d(TAG, "synthesizeToFile returned: $result for text: '$text', file: ${uniqueFile.name}")
 
             // 2. Play on local speakers (speaker monitor status checklist)
             if (localMonitor) {

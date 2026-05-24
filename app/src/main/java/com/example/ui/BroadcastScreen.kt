@@ -401,16 +401,16 @@ fun StatusControlCard(
                             containerColor = Color(0xFF6750A4),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Connect",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Connect Broadcast", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Connect Broadcast", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
                 } else {
                     Button(
@@ -419,16 +419,16 @@ fun StatusControlCard(
                             containerColor = Color(0xFFB3261E),
                             contentColor = Color.White
                         ),
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(24.dp)
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Stop",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Stop Streaming", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Stop Streaming", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
                 }
             }
@@ -1310,6 +1310,8 @@ fun TypingConsoleCard(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     // Bottom auxiliary controls - BIG Space, Backspace, Clear
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1320,12 +1322,12 @@ fun TypingConsoleCard(
                             onClick = { onValueChange(typedText + " ") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1C1B1F)),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+                            border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF6750A4).copy(alpha = 0.3f)),
                             modifier = Modifier
                                 .weight(2f)
-                                .height(46.dp)
+                                .height(52.dp)
                         ) {
-                            Text("📍 ESPAÇO", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("📍 ESPAÇO", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
 
                         // Large Backspace Key
@@ -1339,9 +1341,9 @@ fun TypingConsoleCard(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1.2f)
-                                .height(46.dp)
+                                .height(52.dp)
                         ) {
-                            Text("⌫ Apagar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("⌫ Apagar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
 
                         // Large Clear Key
@@ -1351,9 +1353,9 @@ fun TypingConsoleCard(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(46.dp)
+                                .height(52.dp)
                         ) {
-                            Text("🗑 Limpar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("🗑 Limpar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -1361,13 +1363,44 @@ fun TypingConsoleCard(
 
             HorizontalDivider(color = Color(0xFFF1F1F1), thickness = 1.dp)
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Info badges
-                Column {
+                val buttonEnabled = typedText.trim().isNotEmpty() && isTtsReady
+                Button(
+                    onClick = onBroadcastClick,
+                    enabled = buttonEnabled,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (streamState == StreamState.CONNECTED) Color(0xFF6750A4) else Color(0xFF21005D),
+                        contentColor = Color.White,
+                        disabledContainerColor = Color(0xFFF3F4F9),
+                        disabledContentColor = Color(0xFF938F99)
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Speak / Stream",
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = if (streamState == StreamState.CONNECTED) "STREAM TTS TO BROADCAST 📣" else "SPEAK LOCALLY NOW 🗣",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1383,56 +1416,26 @@ fun TypingConsoleCard(
                         )
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
+                                .size(8.dp)
                                 .background(
-                                    color = Color(0xFF6750A4).copy(alpha = if (autoStream) pulseFactor else 1f),
+                                    color = if (streamState == StreamState.CONNECTED) Color(0xFFB3261E).copy(alpha = pulseFactor) else Color(0xFF6750A4).copy(alpha = pulseFactor),
                                     shape = CircleShape
                                 )
                         )
                         Text(
-                            text = if (autoStream) "Streaming live..." else "Synthesizer active",
-                            fontSize = 10.sp,
-                            color = Color(0xFF49454F)
+                            text = if (streamState == StreamState.CONNECTED) "BROADCAST TRANSMIT ONLINE" else "OFFLINE LOCAL MONITOR",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (streamState == StreamState.CONNECTED) Color(0xFFB3261E) else Color(0xFF49454F)
                         )
                     }
-                }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Text(
-                        text = "${typedText.length} chars",
+                        text = "${typedText.length} characters typed",
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
                         color = Color(0xFF938F99)
                     )
-
-                    val buttonEnabled = typedText.trim().isNotEmpty() && isTtsReady
-                    Button(
-                        onClick = onBroadcastClick,
-                        enabled = buttonEnabled,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFEADDFF),
-                            contentColor = Color(0xFF21005D),
-                            disabledContainerColor = Color(0xFFF3F4F9),
-                            disabledContentColor = Color(0xFF938F99)
-                        ),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.height(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Send,
-                            contentDescription = "Speak",
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (streamState == StreamState.CONNECTED) "Stream" else "Speak",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
                 }
             }
         }
@@ -1550,52 +1553,50 @@ fun ZenoLiveMonitorCard(
                 )
             }
 
+            // Dynamic and clean layout: status row + full-width control button
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(
-                                color = if (isMonitoring) Color(0xFF4CAF50) else Color(0xFF757575),
-                                shape = CircleShape
-                            )
-                    )
-                    Text(
-                        text = if (isMonitoring) "Live Monitor Active" else "Monitor Player Ready",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isMonitoring) Color(0xFF4CAF50) else Color(0xFF49454F)
-                    )
-                }
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(
+                            color = if (isMonitoring) Color(0xFF4CAF50) else Color(0xFF757575),
+                            shape = CircleShape
+                        )
+                )
+                Text(
+                    text = if (isMonitoring) "Live Monitor Active" else "Monitor Player Ready",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isMonitoring) Color(0xFF4CAF50) else Color(0xFF49454F)
+                )
+            }
 
-                Button(
-                    onClick = onToggleMonitor,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isMonitoring) Color(0xFFB3261E) else Color(0xFF6750A4),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(20.dp),
-                    modifier = Modifier.height(38.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isMonitoring) Icons.Default.Refresh else Icons.Default.PlayArrow,
-                        contentDescription = "Control",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isMonitoring) "Mute Listener" else "Listen Live Loop",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            Button(
+                onClick = onToggleMonitor,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isMonitoring) Color(0xFFB3261E) else Color(0xFF6750A4),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+            ) {
+                Icon(
+                    imageVector = if (isMonitoring) Icons.Default.Refresh else Icons.Default.PlayArrow,
+                    contentDescription = "Control",
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isMonitoring) "Mute Listener Player" else "Listen Live Loop Stream",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

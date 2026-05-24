@@ -15,9 +15,15 @@ object WavParser {
             val bytes = file.readBytes()
             if (bytes.size < 44) return null
 
-            // Check RIFF header is present
-            if (bytes[0].toChar() != 'R' || bytes[1].toChar() != 'I' || bytes[2].toChar() != 'F' || bytes[3].toChar() != 'F') return null
-            if (bytes[8].toChar() != 'W' || bytes[9].toChar() != 'A' || bytes[10].toChar() != 'V' || bytes[11].toChar() != 'E') return null
+            // Check RIFF header is present by comparing byte values directly
+            if (bytes[0] != 'R'.code.toByte() || bytes[1] != 'I'.code.toByte() || bytes[2] != 'F'.code.toByte() || bytes[3] != 'F'.code.toByte()) {
+                android.util.Log.e("WavParser", "Failed RIFF check: " + bytes.sliceArray(0..3).map { it.toInt().toChar() })
+                return null
+            }
+            if (bytes[8] != 'W'.code.toByte() || bytes[9] != 'A'.code.toByte() || bytes[10] != 'V'.code.toByte() || bytes[11] != 'E'.code.toByte()) {
+                android.util.Log.e("WavParser", "Failed WAVE check: " + bytes.sliceArray(8..11).map { it.toInt().toChar() })
+                return null
+            }
 
             var offset = 12
             var channels = 1
