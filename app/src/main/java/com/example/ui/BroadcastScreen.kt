@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,6 +78,8 @@ fun BroadcastScreen(
     var tempPassword by remember { mutableStateOf(radioSettings.password) }
     var tempAutoStream by remember { mutableStateOf(radioSettings.autoStreamOnSpace) }
     var tempLocalMonitor by remember { mutableStateOf(radioSettings.localVoiceMonitor) }
+    var tempTtsEngine by remember { mutableStateOf(radioSettings.ttsEngine) }
+    var tempGeminiVoice by remember { mutableStateOf(radioSettings.geminiVoice) }
 
     var selectedLocaleText by remember(currentLocale) { mutableStateOf(currentLocale.displayName) }
     var localeSelectorExpanded by remember { mutableStateOf(false) }
@@ -90,6 +93,8 @@ fun BroadcastScreen(
         tempPassword = radioSettings.password
         tempAutoStream = radioSettings.autoStreamOnSpace
         tempLocalMonitor = radioSettings.localVoiceMonitor
+        tempTtsEngine = radioSettings.ttsEngine
+        tempGeminiVoice = radioSettings.geminiVoice
     }
 
     if (showSettings) {
@@ -101,6 +106,8 @@ fun BroadcastScreen(
             password = tempPassword,
             autoStream = tempAutoStream,
             localMonitor = tempLocalMonitor,
+            ttsEngine = tempTtsEngine,
+            geminiVoice = tempGeminiVoice,
             onHostChange = { tempHost = it },
             onPortChange = { tempPort = it },
             onMountChange = { tempMountpoint = it },
@@ -108,6 +115,8 @@ fun BroadcastScreen(
             onPasswordChange = { tempPassword = it },
             onAutoStreamToggle = { tempAutoStream = it },
             onLocalMonitorToggle = { tempLocalMonitor = it },
+            onTtsEngineChange = { tempTtsEngine = it },
+            onGeminiVoiceChange = { tempGeminiVoice = it },
             onSave = {
                 val parsedPort = tempPort.toIntOrNull() ?: 80
                 viewModel.saveSettings(
@@ -118,7 +127,9 @@ fun BroadcastScreen(
                         username = tempUsername.trim(),
                         password = tempPassword,
                         autoStreamOnSpace = tempAutoStream,
-                        localVoiceMonitor = tempLocalMonitor
+                        localVoiceMonitor = tempLocalMonitor,
+                        ttsEngine = tempTtsEngine,
+                        geminiVoice = tempGeminiVoice
                     )
                 )
                 showSettings = false
@@ -674,6 +685,8 @@ fun ServerSettingsScreen(
     password: String,
     autoStream: Boolean,
     localMonitor: Boolean,
+    ttsEngine: String,
+    geminiVoice: String,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onMountChange: (String) -> Unit,
@@ -681,6 +694,8 @@ fun ServerSettingsScreen(
     onPasswordChange: (String) -> Unit,
     onAutoStreamToggle: (Boolean) -> Unit,
     onLocalMonitorToggle: (Boolean) -> Unit,
+    onTtsEngineChange: (String) -> Unit,
+    onGeminiVoiceChange: (String) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
     onPreFillDemo: () -> Unit
@@ -850,6 +865,115 @@ fun ServerSettingsScreen(
                             ),
                             singleLine = true
                         )
+                    }
+                }
+            }
+
+            // Dedicated Voice Synthesis Engine Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "SÍNTESE DE VOZ (TTS)",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6750A4),
+                        letterSpacing = 0.8.sp
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Mecanismo Ativo", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "WEB" to "Google Web",
+                                "LOCAL" to "Local Android",
+                                "GEMINI" to "AI Studio (Gemini)"
+                            ).forEach { (key, label) ->
+                                val selected = ttsEngine == key
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            color = if (selected) Color(0xFFEADDFF) else Color(0xFFF1F1F1),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable { onTtsEngineChange(key) }
+                                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) Color(0xFF21005D) else Color(0xFF49454F)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (ttsEngine == "GEMINI") {
+                        HorizontalDivider(color = Color(0xFFE1E3E1), thickness = 1.dp)
+
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Voz do Google AI Studio", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                                Text("Expressivo & Natural", fontSize = 10.sp, color = Color(0xFF6750A4), fontWeight = FontWeight.Bold)
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf("Kore", "Puck", "Charon", "Fenrir", "Aoede").forEach { name ->
+                                    val isSelected = geminiVoice == name
+                                    androidx.compose.material3.FilterChip(
+                                        selected = isSelected,
+                                        onClick = { onGeminiVoiceChange(name) },
+                                        label = {
+                                            Text(text = name, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        },
+                                        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFFEADDFF),
+                                            selectedLabelColor = Color(0xFF21005D)
+                                        )
+                                    )
+                                }
+                            }
+
+                            val voiceDescription = when (geminiVoice) {
+                                "Kore" -> "Kore: Voz feminina com entonação profissional, clara e natural."
+                                "Puck" -> "Puck: Voz com entonação enérgica e envolvente ideal para narração."
+                                "Charon" -> "Charon: Voz acolhedora e calorosa para um tom amigável."
+                                "Fenrir" -> "Fenrir: Tom encorpado com frequência grave de rádio clássico."
+                                "Aoede" -> "Aoede: Voz feminina melodiosa e expressiva."
+                                else -> ""
+                            }
+                            Text(
+                                text = voiceDescription,
+                                fontSize = 11.sp,
+                                color = Color(0xFF49454F),
+                                style = androidx.compose.ui.text.TextStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+                            )
+                        }
                     }
                 }
             }

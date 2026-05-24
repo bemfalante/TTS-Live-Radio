@@ -215,30 +215,36 @@ class TtsManager(
 
     fun speakLocally(
         text: String,
+        engine: String = "WEB",
+        voiceName: String = "Kore",
         pitch: Float = 1.0f,
         speed: Float = 1.0f
     ) {
-        if (_useWebTts.value) {
+        if (engine == "GEMINI") {
+            speakWithGeminiEngine(text, voiceName, localMonitor = true)
+            return
+        }
+        if (engine == "WEB") {
             speakWithWebEngine(text, localMonitor = true)
             return
         }
 
-        val engine = tts ?: return
+        val localEngine = tts ?: return
         if (!_isInitialized.value) return
 
         try {
             val selectedLocale = _currentLocale.value
             try {
-                engine.language = selectedLocale
+                localEngine.language = selectedLocale
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting language $selectedLocale", e)
             }
-            engine.setPitch(pitch)
-            engine.setSpeechRate(speed)
+            localEngine.setPitch(pitch)
+            localEngine.setSpeechRate(speed)
 
             val localUtteranceId = "local_only_${System.currentTimeMillis()}"
             val result = try {
-                engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, localUtteranceId)
+                localEngine.speak(text, TextToSpeech.QUEUE_FLUSH, null, localUtteranceId)
             } catch (e: Exception) {
                 Log.e(TAG, "engine.speak locally failed", e)
                 -1
@@ -251,27 +257,33 @@ class TtsManager(
 
     fun speak(
         text: String,
+        engine: String = "WEB",
+        voiceName: String = "Kore",
         pitch: Float = 1.0f,
         speed: Float = 1.0f,
         localMonitor: Boolean = true
     ) {
-        if (_useWebTts.value) {
+        if (engine == "GEMINI") {
+            speakWithGeminiEngine(text, voiceName, localMonitor)
+            return
+        }
+        if (engine == "WEB") {
             speakWithWebEngine(text, localMonitor)
             return
         }
 
-        val engine = tts ?: return
+        val localEngine = tts ?: return
         if (!_isInitialized.value) return
 
         try {
             val selectedLocale = _currentLocale.value
             try {
-                engine.language = selectedLocale
+                localEngine.language = selectedLocale
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting language $selectedLocale", e)
             }
-            engine.setPitch(pitch)
-            engine.setSpeechRate(speed)
+            localEngine.setPitch(pitch)
+            localEngine.setSpeechRate(speed)
 
             val utteranceId = "stream_${System.currentTimeMillis()}"
             utteranceTextMap[utteranceId] = text
@@ -289,7 +301,7 @@ class TtsManager(
             } catch (ignored: Exception) {}
 
             val result = try {
-                engine.synthesizeToFile(text, params, uniqueFile, utteranceId)
+                localEngine.synthesizeToFile(text, params, uniqueFile, utteranceId)
             } catch (e: Exception) {
                 Log.e(TAG, "synthesizeToFile exception", e)
                 -1
@@ -299,13 +311,121 @@ class TtsManager(
             if (localMonitor) {
                 val localUtteranceId = "local_${System.currentTimeMillis()}"
                 try {
-                    engine.speak(text, TextToSpeech.QUEUE_ADD, null, localUtteranceId)
+                    localEngine.speak(text, TextToSpeech.QUEUE_ADD, null, localUtteranceId)
                 } catch (e: Exception) {
                     Log.e(TAG, "engine.speak failed for local monitor", e)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "TTS error speaking text", e)
+        }
+    }
+
+    private fun speakWithGeminiEngine(text: String, voiceName: String, localMonitor: Boolean) {
+        scope.launch {
+            try {
+                val utteranceId = "gemini_${System.currentTimeMillis()}"
+                val dir = context.externalCacheDir ?: context.cacheDir
+                val uniqueFile = File(dir, "tts_${utteranceId}.mp3")
+
+                Log.d(TAG, "Gemini AI Studio TTS requested. Voice: $voiceName. text: '$text'")
+                
+                // Escape JSON text safely
+                val safeText = text.replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+
+                val jsonPayload = """
+                    {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {
+                                        "text": "$safeText"
+                                    }
+                                ]
+                            }
+                        ],
+                        "generationConfig": {
+                            "responseModalities": ["AUDIO"],
+                            "speechConfig": {
+                                "voiceConfig": {
+                                    "prebuiltVoiceConfig": {
+                                        "voiceName": "$voiceName"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                """.trimIndent()
+
+                val apiKey = com.example.BuildConfig.GEMINI_API_KEY
+                if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+                    Log.e(TAG, "Gemini API Key is empty or placeholder! Please ensure you have set GEMINI_API_KEY in the Secrets panel.")
+                    speakWithWebEngine(text, localMonitor)
+                    return@launch
+                }
+
+                val urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=$apiKey"
+                val url = URL(urlString)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Content-Type", "application/json; utf-8")
+                conn.setRequestProperty("Accept", "application/json")
+                conn.connectTimeout = 15000
+                conn.readTimeout = 15000
+                conn.doOutput = true
+
+                conn.outputStream.use { os ->
+                    val input = jsonPayload.toByteArray(charset("utf-8"))
+                    os.write(input, 0, input.size)
+                }
+
+                if (conn.responseCode == 200) {
+                    val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                    val base64DataPattern = java.util.regex.Pattern.compile("\"data\"\\s*:\\s*\"([^\"]+)\"")
+                    val matcher = base64DataPattern.matcher(responseText)
+                    if (matcher.find()) {
+                        val base64Data = matcher.group(1) ?: ""
+                        if (base64Data.isNotEmpty()) {
+                            val audioBytes = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+                            uniqueFile.outputStream().use { output ->
+                                output.write(audioBytes)
+                            }
+                            Log.d(TAG, "Successfully downloaded Gemini Audio Base64: ${audioBytes.size} bytes")
+
+                            val pcmData = AudioDecoder.decodeToPcm(uniqueFile, 16000)
+                            if (pcmData != null && pcmData.isNotEmpty()) {
+                                Log.d(TAG, "Decoded Gemini TTS to Mono PCM: ${pcmData.size} shorts")
+                                onPcmSynthesized(text, pcmData, 16000)
+                                if (localMonitor) {
+                                    playPcmLocally(pcmData, 16000)
+                                }
+                            } else {
+                                Log.e(TAG, "Failed decoding Gemini base64 bytes to PCM mono shorts")
+                            }
+                        } else {
+                            Log.e(TAG, "Found data field but base64 payload was empty")
+                        }
+                    } else {
+                        Log.e(TAG, "Could not extract 'data' key with base64 audio contents from Gemini API JSON response")
+                    }
+                } else {
+                    val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "Unknown HTTP error"
+                    Log.e(TAG, "Gemini API rejected request: HTTP Code ${conn.responseCode}. Message: $errorText")
+                    speakWithWebEngine(text, localMonitor)
+                }
+
+                try {
+                    if (uniqueFile.exists()) {
+                        uniqueFile.delete()
+                    }
+                } catch (ignored: Exception) {}
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini TTS processing query failed", e)
+                speakWithWebEngine(text, localMonitor)
+            }
         }
     }
 

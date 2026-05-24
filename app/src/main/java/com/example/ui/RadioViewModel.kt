@@ -126,7 +126,14 @@ class RadioViewModel(
             } catch (e: Exception) {
                 Log.e(TAG, "AudioTrack playing failed, falling back to TTS directly", e)
                 // Fallback to TTS directly!
-                ttsManager.speakLocally(clip.text, _pitch.value, _speed.value)
+                val settings = settingsState.value
+                ttsManager.speakLocally(
+                    text = clip.text,
+                    engine = settings.ttsEngine,
+                    voiceName = settings.geminiVoice,
+                    pitch = _pitch.value,
+                    speed = _speed.value
+                )
             } finally {
                 try {
                     audioTrack?.stop()
@@ -232,8 +239,8 @@ class RadioViewModel(
 
         if (text.length > streamedIndex) {
             val lastChar = text.last()
-            // Word boundaries triggers streaming
-            if (lastChar == ' ' || lastChar == '.' || lastChar == '?' || lastChar == '!' || lastChar == ',' || lastChar == '\n') {
+            // Triggers speaking only after a final point, interrogation, exclamation or newline (does not use space/comma as bounds)
+            if (lastChar == '.' || lastChar == '?' || lastChar == '!' || lastChar == '\n') {
                 val phrase = text.substring(streamedIndex, text.length).trim()
                 if (phrase.isNotEmpty()) {
                     triggerTtsSpeech(phrase, settings)
@@ -269,13 +276,21 @@ class RadioViewModel(
         if (streamState.value != StreamState.CONNECTED) {
             Log.w(TAG, "Tts synthesis suppressed since radio is not connected")
             // Make a local monitoring speech voice cue anyway so that they know they aren't on stream
-            ttsManager.speakLocally(phrase, pitch.value, speed.value)
+            ttsManager.speakLocally(
+                text = phrase,
+                engine = settings.ttsEngine,
+                voiceName = settings.geminiVoice,
+                pitch = pitch.value,
+                speed = speed.value
+            )
             return
         }
 
         // Send down to TTS system using current voice configurations
         ttsManager.speak(
             text = phrase,
+            engine = settings.ttsEngine,
+            voiceName = settings.geminiVoice,
             pitch = _pitch.value,
             speed = _speed.value,
             localMonitor = settings.localVoiceMonitor

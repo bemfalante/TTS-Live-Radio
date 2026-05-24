@@ -5,7 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [RadioSettings::class, BroadcastHistory::class], version = 1, exportSchema = false)
+@Database(entities = [RadioSettings::class, BroadcastHistory::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun radioDao(): RadioDao
 
