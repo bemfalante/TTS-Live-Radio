@@ -1,0 +1,6 @@
+{
+  "name": "TTS Live Radio",
+  "description": "Convert typed text to speech in real-time and live stream it directly to a Zeno.fm or Icecast server.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
