@@ -65,6 +65,8 @@ fun BroadcastScreen(
     val isLiveMonitoring by viewModel.isLiveMonitoring.collectAsStateWithLifecycle()
     val localMonitorError by viewModel.localMonitorError.collectAsStateWithLifecycle()
     val synthesizedClips by viewModel.synthesizedClips.collectAsStateWithLifecycle()
+    val isImporting by viewModel.isImporting.collectAsStateWithLifecycle()
+    val importError by viewModel.importError.collectAsStateWithLifecycle()
 
     // local UI states
     var showSettings by remember { mutableStateOf(false) }
@@ -90,8 +92,49 @@ fun BroadcastScreen(
         tempLocalMonitor = radioSettings.localVoiceMonitor
     }
 
-    Scaffold(
-        topBar = {
+    if (showSettings) {
+        ServerSettingsScreen(
+            host = tempHost,
+            port = tempPort,
+            mount = tempMountpoint,
+            username = tempUsername,
+            password = tempPassword,
+            autoStream = tempAutoStream,
+            localMonitor = tempLocalMonitor,
+            onHostChange = { tempHost = it },
+            onPortChange = { tempPort = it },
+            onMountChange = { tempMountpoint = it },
+            onUserChange = { tempUsername = it },
+            onPasswordChange = { tempPassword = it },
+            onAutoStreamToggle = { tempAutoStream = it },
+            onLocalMonitorToggle = { tempLocalMonitor = it },
+            onSave = {
+                val parsedPort = tempPort.toIntOrNull() ?: 80
+                viewModel.saveSettings(
+                    RadioSettings(
+                        host = tempHost.trim(),
+                        port = parsedPort,
+                        mountpoint = tempMountpoint.trim(),
+                        username = tempUsername.trim(),
+                        password = tempPassword,
+                        autoStreamOnSpace = tempAutoStream,
+                        localVoiceMonitor = tempLocalMonitor
+                    )
+                )
+                showSettings = false
+            },
+            onBack = { showSettings = false },
+            onPreFillDemo = {
+                tempHost = "stream.zeno.fm"
+                tempPort = "80"
+                tempMountpoint = "demo_mnt"
+                tempUsername = "source"
+                tempPassword = "password123"
+            }
+        )
+    } else {
+        Scaffold(
+            topBar = {
             TopAppBar(
                 title = {
                     Column(
@@ -173,6 +216,81 @@ fun BroadcastScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // High fidelity status card for importing and decoding shared audio files
+            if (isImporting) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F0FE)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1D3557).copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFF1A73E8)
+                        )
+                        Text(
+                            text = "Decodificando e importando áudio compartilhado...",
+                            fontSize = 12.sp,
+                            color = Color(0xFF1967D2),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            importError?.let { err ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEEBEE)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFB3261E).copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = Color(0xFFC53929),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = err,
+                                fontSize = 12.sp,
+                                color = Color(0xFFC53929),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        TextButton(
+                            onClick = { viewModel.clearImportError() },
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text(
+                                text = "Fechar",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFFC53929)
+                            )
+                        }
+                    }
+                }
+            }
+
             // 1. Connection Status Badge & Controls
             StatusControlCard(
                 streamState = streamState,
@@ -188,47 +306,7 @@ fun BroadcastScreen(
                 streamState = streamState
             )
 
-            // 3. Settings Drawer Expandable Component
-            AnimatedVisibility(visible = showSettings) {
-                ServerSettingsCard(
-                    host = tempHost,
-                    port = tempPort,
-                    mount = tempMountpoint,
-                    username = tempUsername,
-                    password = tempPassword,
-                    autoStream = tempAutoStream,
-                    localMonitor = tempLocalMonitor,
-                    onHostChange = { tempHost = it },
-                    onPortChange = { tempPort = it },
-                    onMountChange = { tempMountpoint = it },
-                    onUserChange = { tempUsername = it },
-                    onPasswordChange = { tempPassword = it },
-                    onAutoStreamToggle = { tempAutoStream = it },
-                    onLocalMonitorToggle = { tempLocalMonitor = it },
-                    onSave = {
-                        val parsedPort = tempPort.toIntOrNull() ?: 80
-                        viewModel.saveSettings(
-                            RadioSettings(
-                                host = tempHost.trim(),
-                                port = parsedPort,
-                                mountpoint = tempMountpoint.trim(),
-                                username = tempUsername.trim(),
-                                password = tempPassword,
-                                autoStreamOnSpace = tempAutoStream,
-                                localVoiceMonitor = tempLocalMonitor
-                            )
-                        )
-                        showSettings = false
-                    },
-                    onPreFillDemo = {
-                        tempHost = "stream.zeno.fm"
-                        tempPort = "80"
-                        tempMountpoint = "demo_mnt"
-                        tempUsername = "source"
-                        tempPassword = "password123"
-                    }
-                )
-            }
+            // 3. Settings Screen has been migrated to a dedicated fullscreen experience!
 
             // 4. Voice Controls Drawer (Language selector / speech speed)
             VoiceSettingsCard(
@@ -294,6 +372,7 @@ fun BroadcastScreen(
                 }
             )
         }
+    }
     }
 }
 
@@ -585,8 +664,9 @@ fun SignalWaveformCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ServerSettingsCard(
+fun ServerSettingsScreen(
     host: String,
     port: String,
     mount: String,
@@ -602,169 +682,256 @@ fun ServerSettingsCard(
     onAutoStreamToggle: (Boolean) -> Unit,
     onLocalMonitorToggle: (Boolean) -> Unit,
     onSave: () -> Unit,
+    onBack: () -> Unit,
     onPreFillDemo: () -> Unit
 ) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        shape = RoundedCornerShape(28.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Configuração do Servidor",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1C1B1F)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Voltar",
+                            tint = Color(0xFF1C1B1F)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.White
+                )
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color(0xFFF7F8FA))
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Server Configuration",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = Color(0xFF1C1B1F)
-                )
-                TextButton(onClick = onPreFillDemo) {
-                    Text(
-                        text = "Pre-fill Demo Link",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF6750A4)
-                    )
-                }
-            }
-
-            OutlinedTextField(
-                value = host,
-                onValueChange = onHostChange,
-                label = { Text("Broadcasting Host / Server Domain") },
-                placeholder = { Text("e.g. stream.zeno.fm") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedBorderColor = Color(0xFFE1E3E1),
-                    focusedBorderColor = Color(0xFF6750A4)
+            // Elegant Zeno.fm Branding Card
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFEADDFF).copy(alpha = 0.5f)
                 ),
-                singleLine = true
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = port,
-                    onValueChange = onPortChange,
-                    label = { Text("Port") },
-                    placeholder = { Text("80") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color(0xFFE1E3E1),
-                        focusedBorderColor = Color(0xFF6750A4)
-                    ),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = mount,
-                    onValueChange = onMountChange,
-                    label = { Text("Mountpoint") },
-                    placeholder = { Text("e.g. demo_mnt") },
-                    modifier = Modifier.weight(2f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color(0xFFE1E3E1),
-                        focusedBorderColor = Color(0xFF6750A4)
-                    ),
-                    singleLine = true
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = username,
-                    onValueChange = onUserChange,
-                    label = { Text("Source User") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color(0xFFE1E3E1),
-                        focusedBorderColor = Color(0xFF6750A4)
-                    ),
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = onPasswordChange,
-                    label = { Text("Broadcast Password") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedBorderColor = Color(0xFFE1E3E1),
-                        focusedBorderColor = Color(0xFF6750A4)
-                    ),
-                    singleLine = true
-                )
-            }
-
-            HorizontalDivider(color = Color(0xFFE1E3E1), thickness = 1.dp)
-
-            // Option switches
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6750A4).copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Auto Stream Word-by-Word", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
-                    Text("Speak and stream as you write (triggers on spaces & punctuation)", fontSize = 10.sp, color = Color(0xFF49454F))
-                }
-                Switch(
-                    checked = autoStream,
-                    onCheckedChange = onAutoStreamToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF6750A4)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "📡 Conecte sua Rádio Zeno.fm / Icecast",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF21005D)
                     )
-                )
+                    Text(
+                        text = "Insira as credenciais de transmissão Icecast fornecidas pelo painel da Zeno Media para transmitir seu texto-para-voz em altíssima velocidade e baixíssima latência ao vivo.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF49454F),
+                        lineHeight = 16.sp
+                    )
+                    TextButton(
+                        onClick = onPreFillDemo,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Preencher com Link Demonstrativo", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6750A4))
+                    }
+                }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Input fields section
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Local Speaker Monitor", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
-                    Text("Hear the spoken phrase from your device speaker simultaneously", fontSize = 10.sp, color = Color(0xFF49454F))
-                }
-                Switch(
-                    checked = localMonitor,
-                    onCheckedChange = onLocalMonitorToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF6750A4)
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "PARÂMETROS DE CONEXÃO",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6750A4),
+                        letterSpacing = 0.8.sp
                     )
-                )
+
+                    OutlinedTextField(
+                        value = host,
+                        onValueChange = onHostChange,
+                        label = { Text("Domínio do Servidor (Host)") },
+                        placeholder = { Text("Ex: stream.zeno.fm") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color(0xFFE1E3E1),
+                            focusedBorderColor = Color(0xFF6750A4)
+                        ),
+                        singleLine = true
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = port,
+                            onValueChange = onPortChange,
+                            label = { Text("Porta") },
+                            placeholder = { Text("80") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color(0xFFE1E3E1),
+                                focusedBorderColor = Color(0xFF6750A4)
+                            ),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = mount,
+                            onValueChange = onMountChange,
+                            label = { Text("Ponto de Montagem") },
+                            placeholder = { Text("Ex: demo_mnt") },
+                            modifier = Modifier.weight(2.5f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color(0xFFE1E3E1),
+                                focusedBorderColor = Color(0xFF6750A4)
+                            ),
+                            singleLine = true
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = onUserChange,
+                            label = { Text("Usuário") },
+                            placeholder = { Text("source") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color(0xFFE1E3E1),
+                                focusedBorderColor = Color(0xFF6750A4)
+                            ),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = onPasswordChange,
+                            label = { Text("Senha") },
+                            modifier = Modifier.weight(1.2f),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedBorderColor = Color(0xFFE1E3E1),
+                                focusedBorderColor = Color(0xFF6750A4)
+                            ),
+                            singleLine = true
+                        )
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            // Options Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "PREFERÊNCIAS DE SISTEMA",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6750A4),
+                        letterSpacing = 0.8.sp
+                    )
 
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Microfone Automático Inteligente", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                            Text("Gera e transmite voz frase por frase automaticamente acionados por espaçamento ou pontuação.", fontSize = 11.sp, color = Color(0xFF49454F), lineHeight = 14.sp)
+                        }
+                        Switch(
+                            checked = autoStream,
+                            onCheckedChange = onAutoStreamToggle,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF6750A4)
+                            )
+                        )
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE1E3E1), thickness = 1.dp)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Monitoramento de Autofalante Local", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                            Text("Emite a pré-escuta da frase gerada no alto-falante físico do dispositivo ao mesmo tempo da transmissão.", fontSize = 11.sp, color = Color(0xFF49454F), lineHeight = 14.sp)
+                        }
+                        Switch(
+                            checked = localMonitor,
+                            onCheckedChange = onLocalMonitorToggle,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF6750A4)
+                            )
+                        )
+                    }
+                }
+            }
+
+            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+
+            // Save connection button
             Button(
                 onClick = onSave,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF6750A4),
                     contentColor = Color.White
                 ),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(26.dp)
             ) {
-                Icon(imageVector = Icons.Default.Check, contentDescription = "Save settings", modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Apply Connection Parameters", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Icon(imageVector = Icons.Default.Check, contentDescription = "Salvar", modifier = Modifier.size(18.dp))
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
+                Text("Aplicar Configurações e Salvar", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }

@@ -323,6 +323,50 @@ class RadioViewModel(
         }
     }
 
+    // Shared Audio Import Logic
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting = _isImporting.asStateFlow()
+
+    private val _importError = MutableStateFlow<String?>(null)
+    val importError = _importError.asStateFlow()
+
+    fun importSharedAudio(file: java.io.File, displayName: String) {
+        _isImporting.value = true
+        _importError.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Decode to 16kHz PCM mono shorts
+                val pcmData = com.example.streaming.AudioDecoder.decodeToPcm(file, 16000)
+                if (pcmData != null && pcmData.isNotEmpty()) {
+                    val decodedClip = SynthesizedClip(
+                        text = "Áudio: $displayName",
+                        pcmData = pcmData,
+                        sampleRate = 16000
+                    )
+                    _synthesizedClips.value = _synthesizedClips.value + decodedClip
+                    Log.d(TAG, "Successfully imported shared sound clip: '$displayName', size=${pcmData.size}")
+                } else {
+                    _importError.value = "Não foi possível decodificar o arquivo de áudio. Garanta que seja um formato compatível."
+                    Log.e(TAG, "Audio decoding failed for shared file: ${file.name}")
+                }
+            } catch (e: Exception) {
+                _importError.value = "Erro ao processar áudio: ${e.message}"
+                Log.e(TAG, "Error processing shared audio", e)
+            } finally {
+                _isImporting.value = false
+                try {
+                    if (file.exists()) {
+                        file.delete()
+                    }
+                } catch (ignored: Exception) {}
+            }
+        }
+    }
+
+    fun clearImportError() {
+        _importError.value = null
+    }
+
     fun clearHistory() {
         viewModelScope.launch {
             repository.clearHistory()
