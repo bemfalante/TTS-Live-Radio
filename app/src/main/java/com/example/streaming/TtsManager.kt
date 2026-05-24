@@ -33,56 +33,60 @@ class TtsManager(
     }
 
     override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            val engine = tts
-            if (engine != null) {
-                // Discover languages safely and rapidly
-                val locales = mutableListOf<Locale>()
-                try {
-                    val available = engine.availableLanguages
-                    if (available != null && available.isNotEmpty()) {
-                        locales.addAll(available)
-                    } else {
-                        // Fallback to testing only standard common languages to avoid long loops
-                        val commonLocales = listOf(
-                            Locale.US, Locale.UK, Locale.CANADA, 
-                            Locale.FRANCE, Locale.GERMANY, Locale.ITALY, 
-                            Locale.CHINESE, Locale.JAPANESE, Locale.KOREAN,
-                            Locale("pt", "BR"), Locale("es", "ES")
-                        )
-                        for (locale in commonLocales) {
-                            val availability = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
-                            if (availability >= TextToSpeech.LANG_AVAILABLE) {
-                                locales.add(locale)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (status == TextToSpeech.SUCCESS) {
+                val engine = tts
+                if (engine != null) {
+                    // Discover languages safely and rapidly
+                    val locales = mutableListOf<Locale>()
+                    try {
+                        val available = engine.availableLanguages
+                        if (available != null && available.isNotEmpty()) {
+                            locales.addAll(available)
+                        } else {
+                            // Fallback to testing only standard common languages to avoid long loops
+                            val commonLocales = listOf(
+                                Locale.US, Locale.UK, Locale.CANADA, 
+                                Locale.FRANCE, Locale.GERMANY, Locale.ITALY, 
+                                Locale.CHINESE, Locale.JAPANESE, Locale.KOREAN,
+                                Locale("pt", "BR"), Locale("es", "ES")
+                            )
+                            for (locale in commonLocales) {
+                                val availability = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
+                                if (availability >= TextToSpeech.LANG_AVAILABLE) {
+                                    locales.add(locale)
+                                }
                             }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error checking languages", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error checking languages", e)
-                }
 
-                // If empty fallback to default standard ones
-                if (locales.isEmpty()) {
-                    locales.addAll(listOf(Locale.US, Locale.UK, Locale.FRANCE, Locale.GERMANY, Locale.ITALY))
-                }
+                    // If empty, fallback to default standard ones including Portuguese
+                    if (locales.isEmpty()) {
+                        locales.addAll(listOf(Locale.US, Locale.UK, Locale.FRANCE, Locale.GERMANY, Locale.ITALY, Locale("pt", "BR"), Locale("es", "ES")))
+                    }
 
-                _availableLocales.value = locales.sortedBy { it.displayName }
-                _isInitialized.value = true
+                    _availableLocales.value = locales.sortedBy { it.displayName }
+                    _isInitialized.value = true
 
-                // Default setup - use default locale if available, else standard US
-                val defaultLocale = Locale.getDefault()
-                val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
-                if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
-                    engine.language = defaultLocale
-                    _currentLocale.value = defaultLocale
+                    // Default setup - use default locale if available, else standard US
+                    val defaultLocale = Locale.getDefault()
+                    val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
+                    if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                        engine.language = defaultLocale
+                        _currentLocale.value = defaultLocale
+                    } else {
+                        engine.language = Locale.US
+                        _currentLocale.value = Locale.US
+                    }
+                    setupProgressListener()
                 } else {
-                    engine.language = Locale.US
-                    _currentLocale.value = Locale.US
+                    Log.e(TAG, "TTS engine is null in deferred onInit handler")
                 }
-                setupProgressListener()
+            } else {
+                Log.e(TAG, "TTS Initialization failed with status: $status")
             }
-        } else {
-            Log.e(TAG, "TTS Initialization failed with status: $status")
         }
     }
 

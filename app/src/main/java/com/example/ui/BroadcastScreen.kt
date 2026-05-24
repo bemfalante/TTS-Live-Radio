@@ -979,7 +979,7 @@ fun TypingConsoleCard(
                         color = Color(0xFF938F99)
                     )
                 },
-                enabled = isTtsReady,
+                enabled = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, color = Color(0xFF1C1B1F)),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
