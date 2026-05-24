@@ -46,10 +46,11 @@ class TtsManager(
                         } else {
                             // Fallback to testing only standard common languages to avoid long loops
                             val commonLocales = listOf(
+                                Locale("pt", "BR"),
                                 Locale.US, Locale.UK, Locale.CANADA, 
                                 Locale.FRANCE, Locale.GERMANY, Locale.ITALY, 
                                 Locale.CHINESE, Locale.JAPANESE, Locale.KOREAN,
-                                Locale("pt", "BR"), Locale("es", "ES")
+                                Locale("es", "ES")
                             )
                             for (locale in commonLocales) {
                                 val availability = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
@@ -64,28 +65,39 @@ class TtsManager(
 
                     // If empty, fallback to default standard ones including Portuguese
                     if (locales.isEmpty()) {
-                        locales.addAll(listOf(Locale.US, Locale.UK, Locale.FRANCE, Locale.GERMANY, Locale.ITALY, Locale("pt", "BR"), Locale("es", "ES")))
+                        locales.addAll(listOf(Locale("pt", "BR"), Locale.US, Locale.UK, Locale.FRANCE, Locale.GERMANY, Locale.ITALY, Locale("es", "ES")))
                     }
 
                     _availableLocales.value = locales.sortedBy { it.displayName }
                     _isInitialized.value = true
 
-                    // Default setup - use default locale if available, else standard US
-                    val defaultLocale = Locale.getDefault()
-                    val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
-                    if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
-                        engine.language = defaultLocale
-                        _currentLocale.value = defaultLocale
+                    // Setup user's default locale, prioritize pt_BR or system locale
+                    val ptBr = Locale("pt", "BR")
+                    val isPtAvailable = try { engine.isLanguageAvailable(ptBr) } catch (e: Exception) { -1 }
+                    if (isPtAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                        engine.language = ptBr
+                        _currentLocale.value = ptBr
+                        Log.d(TAG, "Successfully configured Portuguese (Brazil) as default TTS language")
                     } else {
-                        engine.language = Locale.US
-                        _currentLocale.value = Locale.US
+                        val defaultLocale = Locale.getDefault()
+                        val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
+                        if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                            engine.language = defaultLocale
+                            _currentLocale.value = defaultLocale
+                        } else {
+                            engine.language = Locale.US
+                            _currentLocale.value = Locale.US
+                        }
                     }
                     setupProgressListener()
                 } else {
                     Log.e(TAG, "TTS engine is null in deferred onInit handler")
+                    _isInitialized.value = true
                 }
             } else {
                 Log.e(TAG, "TTS Initialization failed with status: $status")
+                // Fallback to initialized so the UI is active and they can still try to type and speech trigger
+                _isInitialized.value = true
             }
         }
     }

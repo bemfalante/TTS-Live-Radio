@@ -924,6 +924,9 @@ fun TypingConsoleCard(
     onValueChange: (String) -> Unit,
     onBroadcastClick: () -> Unit
 ) {
+    var showSmartKeyboard by remember { mutableStateOf(true) }
+    var activeTab by remember { mutableStateOf("Atalhos") } // "Atalhos", "Fórmulas", "Teclado Rápido"
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -939,29 +942,56 @@ fun TypingConsoleCard(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Badge bar
+            // Header Badge bar & Smart Keyboard Toggle
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "TEXT-TO-SPEECH ENGINE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF6750A4),
-                    letterSpacing = 1.sp
-                )
-                Surface(
-                    color = Color(0xFFEADDFF),
-                    shape = RoundedCornerShape(12.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (isTtsReady) "Ready" else "Initializing",
+                        text = "TEXT-TO-SPEECH ENGINE",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF21005D),
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        color = Color(0xFF6750A4),
+                        letterSpacing = 1.sp
+                    )
+                    Surface(
+                        color = Color(0xFFEADDFF),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (isTtsReady) "Ready" else "Initializing",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF21005D),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                FilledTonalButton(
+                    onClick = { showSmartKeyboard = !showSmartKeyboard },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (showSmartKeyboard) Color(0xFFEADDFF) else Color(0xFFF3F4F9),
+                        contentColor = if (showSmartKeyboard) Color(0xFF21005D) else Color(0xFF49454F)
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Smart Keyboard",
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (showSmartKeyboard) "Fechar Teclado" else "Teclado Inteligente",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -989,6 +1019,345 @@ fun TypingConsoleCard(
                     focusedBorderColor = Color(0xFF6750A4)
                 )
             )
+
+            // Dynamic Inline Smart Keyboard Panel
+            AnimatedVisibility(visible = showSmartKeyboard) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFF7F9FC), shape = RoundedCornerShape(20.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Keyboard Tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val tabs = listOf("Atalhos", "Fórmulas", "Teclado Rápido")
+                        tabs.forEach { tabName ->
+                            val isSelected = activeTab == tabName
+                            Button(
+                                onClick = { activeTab = tabName },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSelected) Color(0xFF6750A4) else Color(0xFFE1E3E1),
+                                    contentColor = if (isSelected) Color.White else Color(0xFF49454F)
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                            ) {
+                                Text(
+                                    text = tabName,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    when (activeTab) {
+                        "Atalhos" -> {
+                            // Large Broadcaster Quick Phrase Shortcut keys
+                            val shortcutsList = listOf(
+                                "📻 Ao Vivo" to "Rádio Ao Vivo! ",
+                                "⏰ Hora Certa" to "Hora certa de acompanhar a sua rádio favorita! ",
+                                "🎁 Promoção!" to "Participe já da nossa grande chuva de prêmios! ",
+                                "🎵 Sucesso" to "Tocando agora o seu maior pedido de sucesso! ",
+                                "💬 Ouvinte" to "Alô ouvinte! Mande agora sua mensagem no nosso chat! ",
+                                "🔥 Nº 1" to "Você ligado na rádio que é o primeiro lugar absoluto na internet! ",
+                                "🔊 Solta o Som!" to "Aumenta o som e sinta essa vibração positiva! ",
+                                "👋 Olá Galera!" to "Olá galera sintonizada! O show começou! ",
+                                "💖 No Coração" to "Programação especial feita direto no seu coração. ",
+                                "💥 Sintonize" to "Deixe sintonizado no melhor áudio e curta! "
+                            )
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Frases de Efeito (Toque para Inserir):",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6750A4)
+                                )
+                                
+                                // Display in horizontal lazy rows or lists to make it touch friendly without breaking flow layout constraints
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(shortcutsList.chunked(5).getOrNull(0) ?: emptyList()) { (label, phrase) ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .clickable {
+                                                    val currentText = typedText
+                                                    val newText = if (currentText.endsWith(" ") || currentText.isEmpty()) {
+                                                        currentText + phrase
+                                                    } else {
+                                                        "$currentText $phrase"
+                                                    }
+                                                    onValueChange(newText)
+                                                },
+                                            color = Color.White,
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6750A4).copy(alpha = 0.2f))
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF21005D),
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(shortcutsList.chunked(5).getOrNull(1) ?: emptyList()) { (label, phrase) ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .clickable {
+                                                    val currentText = typedText
+                                                    val newText = if (currentText.endsWith(" ") || currentText.isEmpty()) {
+                                                        currentText + phrase
+                                                    } else {
+                                                        "$currentText $phrase"
+                                                    }
+                                                    onValueChange(newText)
+                                                },
+                                            color = Color.White,
+                                            shape = RoundedCornerShape(12.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6750A4).copy(alpha = 0.2f))
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF21005D),
+                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "Fórmulas" -> {
+                            // Three parts of step constructor
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Fórmula Inteligente de Frases (Crie em 3 toques):",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6750A4)
+                                )
+                                
+                                val part1 = listOf("Atenção ouvintes, ", "A rádio número um ", "Estamos de volta ", "Sua melhor companhia ")
+                                val part2 = listOf("traz as novidades ", "tocando os sucessos ", "conecta você ", "melhora o seu dia ")
+                                val part3 = listOf("com muita alegria!", "direto no seu fone!", "em primeiro lugar!", "com sinal espetacular!")
+
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    // Row 1
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("1. Início: ", fontSize = 10.sp, color = Color(0xFF6750A4), fontWeight = FontWeight.Bold, modifier = Modifier.width(55.dp))
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            items(part1) { phrase ->
+                                                Surface(
+                                                    modifier = Modifier.clickable {
+                                                        onValueChange(typedText + phrase)
+                                                    },
+                                                    color = Color(0xFFEADDFF),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = phrase.trim(),
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF21005D),
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Row 2
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("2. Meio: ", fontSize = 10.sp, color = Color(0xFF6750A4), fontWeight = FontWeight.Bold, modifier = Modifier.width(55.dp))
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            items(part2) { phrase ->
+                                                Surface(
+                                                    modifier = Modifier.clickable {
+                                                        onValueChange(typedText + phrase)
+                                                    },
+                                                    color = Color(0xFFD0BCFF),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = phrase.trim(),
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF21005D),
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Row 3
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("3. Fim: ", fontSize = 10.sp, color = Color(0xFF6750A4), fontWeight = FontWeight.Bold, modifier = Modifier.width(55.dp))
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            items(part3) { phrase ->
+                                                Surface(
+                                                    modifier = Modifier.clickable {
+                                                        onValueChange(typedText + phrase)
+                                                    },
+                                                    color = Color(0xFFE8DEF8),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = phrase.trim(),
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF21005D),
+                                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        "Teclado Rápido" -> {
+                            val row1 = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+                            val row2 = listOf("!", "?", ",", ".", ":", "-", "@", "📻", "🇧🇷", "❤️")
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    text = "Sinais, Números & Emojis Rápidos:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF6750A4)
+                                )
+                                
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(row1) { key ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .clickable {
+                                                    onValueChange(typedText + key)
+                                                },
+                                            color = Color.White,
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1))
+                                        ) {
+                                            Text(
+                                                text = key,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF1C1B1F),
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(row2) { key ->
+                                        Surface(
+                                            modifier = Modifier
+                                                .clickable {
+                                                    onValueChange(typedText + key)
+                                                },
+                                            color = Color.White,
+                                            shape = RoundedCornerShape(10.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1))
+                                        ) {
+                                            Text(
+                                                text = key,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF1C1B1F),
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Bottom auxiliary controls - BIG Space, Backspace, Clear
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Large Space Key
+                        Button(
+                            onClick = { onValueChange(typedText + " ") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1C1B1F)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+                            modifier = Modifier
+                                .weight(2f)
+                                .height(46.dp)
+                        ) {
+                            Text("📍 ESPAÇO", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Large Backspace Key
+                        Button(
+                            onClick = {
+                                if (typedText.isNotEmpty()) {
+                                    onValueChange(typedText.dropLast(1))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF9DEDC), contentColor = Color(0xFF410E0B)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .height(46.dp)
+                        ) {
+                            Text("⌫ Apagar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Large Clear Key
+                        Button(
+                            onClick = { onValueChange("") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2B8B5), contentColor = Color(0xFF601410)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp)
+                        ) {
+                            Text("🗑 Limpar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
 
             HorizontalDivider(color = Color(0xFFF1F1F1), thickness = 1.dp)
 
