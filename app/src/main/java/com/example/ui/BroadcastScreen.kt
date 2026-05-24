@@ -1412,6 +1412,7 @@ fun TypingConsoleCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f, fill = false),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -1433,18 +1434,21 @@ fun TypingConsoleCard(
                                 )
                         )
                         Text(
-                            text = if (streamState == StreamState.CONNECTED) "BROADCAST TRANSMIT ONLINE" else "OFFLINE LOCAL MONITOR",
+                            text = if (streamState == StreamState.CONNECTED) "COMPARTILHANDO ONLINE" else "MONITOR LOCAL",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (streamState == StreamState.CONNECTED) Color(0xFFB3261E) else Color(0xFF49454F)
+                            color = if (streamState == StreamState.CONNECTED) Color(0xFFB3261E) else Color(0xFF49454F),
+                            maxLines = 1
                         )
                     }
 
                     Text(
-                        text = "${typedText.length} characters typed",
+                        text = "${typedText.length} caracteres",
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF938F99)
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF938F99),
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
                 }
             }
@@ -1539,6 +1543,37 @@ fun TtsClipReviewBoard(
 
                 TextButton(onClick = onClearAll) {
                     Text("Deletar Todos", fontSize = 12.sp, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Prompt Card instructing the user step-by-step on how to use TTS review clips
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFFE8F0FE)
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1A73E8).copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Guideline",
+                        tint = Color(0xFF1A73E8),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "👉 Áudio de voz gerado! Clique em 'Ouvir Local 🔊' para revisar o som, e depois clique em 'Botar no Ar 📡' para transmiti-lo na rádio.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1967D2),
+                        lineHeight = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 

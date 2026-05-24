@@ -24,7 +24,7 @@ class TtsManager(
     private val _availableLocales = MutableStateFlow<List<Locale>>(emptyList())
     val availableLocales = _availableLocales.asStateFlow()
 
-    private val _currentLocale = MutableStateFlow(Locale.US)
+    private val _currentLocale = MutableStateFlow(Locale("pt", "BR"))
     val currentLocale = _currentLocale.asStateFlow()
 
     init {
@@ -62,9 +62,12 @@ class TtsManager(
                         Log.e(TAG, "Error checking languages", e)
                     }
 
-                    // If empty, fallback to default standard ones including Portuguese
-                    if (locales.isEmpty()) {
-                        locales.addAll(listOf(Locale("pt", "BR"), Locale.US, Locale.UK, Locale.FRANCE, Locale.GERMANY, Locale.ITALY, Locale("es", "ES")))
+                    // Ensure Portuguese (Brazil) and English (US) are ALWAYS in the available locales list!
+                    val forcedLocales = listOf(Locale("pt", "BR"), Locale.US)
+                    for (l in forcedLocales) {
+                        if (!locales.any { it.language == l.language && it.country == l.country }) {
+                            locales.add(l)
+                        }
                     }
 
                     _availableLocales.value = locales.sortedBy { it.displayName }
@@ -78,12 +81,13 @@ class TtsManager(
                         _currentLocale.value = ptBr
                         Log.d(TAG, "Successfully configured Portuguese (Brazil) as default TTS language")
                     } else {
-                        val defaultLocale = Locale.getDefault()
-                        val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
-                        if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
-                            engine.language = defaultLocale
-                            _currentLocale.value = defaultLocale
+                        // Even if not officially marked, try setting it! Or fallback to US but keep pt_BR as select option
+                        val result = try { engine.setLanguage(ptBr) } catch (e: Exception) { -1 }
+                        if (result >= TextToSpeech.LANG_AVAILABLE) {
+                            _currentLocale.value = ptBr
+                            Log.d(TAG, "Forced Portuguese (Brazil) as default TTS language")
                         } else {
+                            Log.w(TAG, "Portuguese (Brazil) is not supported by this engine. Defaulting to US English.")
                             engine.language = Locale.US
                             _currentLocale.value = Locale.US
                         }
@@ -140,8 +144,14 @@ class TtsManager(
     }
 
     fun setLanguage(locale: Locale) {
-        _currentLocale.value = locale
-        tts?.language = locale
+        val engine = tts ?: return
+        val check = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
+        val isSupported = check >= TextToSpeech.LANG_AVAILABLE
+        val targetLocale = if (isSupported) locale else Locale.US
+        
+        _currentLocale.value = targetLocale
+        val result = try { engine.setLanguage(targetLocale) } catch (e: Exception) { -1 }
+        Log.d(TAG, "setLanguage target: $locale, supported: $isSupported, set to: $targetLocale, result code: $result")
     }
 
     fun speak(
@@ -154,9 +164,16 @@ class TtsManager(
         if (!_isInitialized.value) return
 
         try {
-            val selectedLocale = _currentLocale.value
-            val langResult = engine.setLanguage(selectedLocale)
+            var selectedLocale = _currentLocale.value
+            val check = try { engine.isLanguageAvailable(selectedLocale) } catch (e: Exception) { -1 }
+            if (check < TextToSpeech.LANG_AVAILABLE) {
+                Log.w(TAG, "Locale $selectedLocale not available. Using Locale.US")
+                selectedLocale = Locale.US
+            }
+
+            val langResult = try { engine.setLanguage(selectedLocale) } catch (e: Exception) { -1 }
             Log.d(TAG, "Enforced language $selectedLocale with result code: $langResult")
+            
             engine.setPitch(pitch)
             engine.setSpeechRate(speed)
 
@@ -166,13 +183,17 @@ class TtsManager(
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
 
             val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
-            val result = engine.synthesizeToFile(text, params, uniqueFile, utteranceId)
+            val result = try { engine.synthesizeToFile(text, params, uniqueFile, utteranceId) } catch (e: Exception) { -1 }
             Log.d(TAG, "synthesizeToFile returned: $result for text: '$text', file: ${uniqueFile.name}")
 
             // 2. Play on local speakers (speaker monitor status checklist)
             if (localMonitor) {
                 val localUtteranceId = "local_${System.currentTimeMillis()}"
-                engine.speak(text, TextToSpeech.QUEUE_ADD, null, localUtteranceId)
+                try {
+                    engine.speak(text, TextToSpeech.QUEUE_ADD, null, localUtteranceId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "engine.speak failed", e)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "TTS error speaking text", e)

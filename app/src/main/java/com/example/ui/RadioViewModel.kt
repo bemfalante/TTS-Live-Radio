@@ -93,23 +93,26 @@ class RadioViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val minBufSize = AudioTrack.getMinBufferSize(
-                    clip.sampleRate,
-                    AudioFormat.CHANNEL_OUT_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT
-                )
-                val bufferSize = Math.max(minBufSize, clip.pcmData.size * 2)
+                val bufferSize = clip.pcmData.size * 2
                 val audioTrack = AudioTrack(
                     AudioManager.STREAM_MUSIC,
                     clip.sampleRate,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     bufferSize,
-                    AudioTrack.MODE_STREAM
+                    AudioTrack.MODE_STATIC
                 )
+                val written = audioTrack.write(clip.pcmData, 0, clip.pcmData.size)
+                Log.d(TAG, "AudioTrack written $written samples in MODE_STATIC. Playing...")
                 audioTrack.play()
-                audioTrack.write(clip.pcmData, 0, clip.pcmData.size)
-                audioTrack.stop()
+                
+                // Sleep matching clip duration + small buffer (e.g. 200ms) to allow full playback drain
+                val durationMs = (clip.pcmData.size.toFloat() / clip.sampleRate * 1000).toLong()
+                Thread.sleep(Math.max(200L, durationMs + 200L))
+                
+                try {
+                    audioTrack.stop()
+                } catch (ignored: Exception) {}
                 audioTrack.release()
             } catch (e: Exception) {
                 Log.e(TAG, "Failed playing local PCM", e)
