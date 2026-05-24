@@ -63,6 +63,7 @@ fun BroadcastScreen(
 
     val isLiveMonitoring by viewModel.isLiveMonitoring.collectAsStateWithLifecycle()
     val localMonitorError by viewModel.localMonitorError.collectAsStateWithLifecycle()
+    val synthesizedClips by viewModel.synthesizedClips.collectAsStateWithLifecycle()
 
     // local UI states
     var showSettings by remember { mutableStateOf(false) }
@@ -74,7 +75,7 @@ fun BroadcastScreen(
     var tempAutoStream by remember { mutableStateOf(radioSettings.autoStreamOnSpace) }
     var tempLocalMonitor by remember { mutableStateOf(radioSettings.localVoiceMonitor) }
 
-    var selectedLocaleText by remember { mutableStateOf(currentLocale.displayName) }
+    var selectedLocaleText by remember(currentLocale) { mutableStateOf(currentLocale.displayName) }
     var localeSelectorExpanded by remember { mutableStateOf(false) }
 
     // Sync settings form once loaded
@@ -254,6 +255,15 @@ fun BroadcastScreen(
                 autoStream = radioSettings.autoStreamOnSpace,
                 onValueChange = { viewModel.updateTypedText(it) },
                 onBroadcastClick = { viewModel.triggerManualSpeech() }
+            )
+
+            // 5b. Synthesized Audio Review & Transmit Queue
+            TtsClipReviewBoard(
+                clips = synthesizedClips,
+                onPlayLocally = { viewModel.playClipLocally(it) },
+                onTransmit = { viewModel.transmitClip(it) },
+                onDelete = { viewModel.deleteClip(it) },
+                onClearAll = { viewModel.clearAllClips() }
             )
 
             // 6. Broadcast History and Common Presets List
@@ -1436,6 +1446,233 @@ fun TypingConsoleCard(
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF938F99)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TtsClipReviewBoard(
+    clips: List<SynthesizedClip>,
+    onPlayLocally: (String) -> Unit,
+    onTransmit: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onClearAll: () -> Unit
+) {
+    if (clips.isEmpty()) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFFF7F9FC)
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "No Clips",
+                    tint = Color(0xFF938F99),
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "Pronto para gerar áudio",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF49454F)
+                )
+                Text(
+                    text = "Digite o texto acima e clique no botão para gerar as faixas de voz. Elas aparecerão aqui para pré-escuta e transmissão detalhada.",
+                    fontSize = 12.sp,
+                    color = Color(0xFF938F99),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+        return
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "GERADOR DE ÁUDIO & MONITOR (PRÉ-ESCUTA)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF6750A4),
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "Lista de vozes geradas para testar e botar no ar",
+                        fontSize = 11.sp,
+                        color = Color(0xFF938F99)
+                    )
+                }
+
+                TextButton(onClick = onClearAll) {
+                    Text("Deletar Todos", fontSize = 12.sp, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                clips.reversed().forEach { clip ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (clip.isTransmitted) Color(0xFFF3Fbf5) else Color(0xFFFAF8FF)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            width = 1.5.dp,
+                            color = if (clip.isTransmitted) Color(0xFF4CAF50).copy(alpha = 0.4f) else Color(0xFF6750A4).copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Clip Text
+                            Text(
+                                text = "\"${clip.text}\"",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1C1B1F),
+                                lineHeight = 18.sp
+                            )
+
+                            // Status tags and metadata row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = if (clip.isTransmitted) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = if (clip.isTransmitted) "📡 NO AR (STREAMED)" else "⏳ AGUARDANDO PRÉ-ESCUTA",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (clip.isTransmitted) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+
+                                    Surface(
+                                        color = Color(0xFFEEEEEE),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "${String.format("%.1fs", clip.durationSeconds)}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF616161),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = { onDelete(clip.id) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = Color(0xFFB3261E),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Big visual review & transmit buttons designed with accessibility in mind (large text, generous height)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { onPlayLocally(clip.id) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (clip.isPlayingLocally) Color(0xFFEADDFF) else Color(0xFFEADDFF).copy(alpha = 0.6f),
+                                        contentColor = Color(0xFF21005D)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(52.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Ouvir",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (clip.isPlayingLocally) "Tocando..." else "Ouvir Local 🔊",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { onTransmit(clip.id) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF6750A4),
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1.1f)
+                                        .height(52.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Transmitir",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Botar no Ar 📡",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

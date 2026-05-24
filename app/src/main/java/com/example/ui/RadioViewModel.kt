@@ -24,6 +24,20 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Locale
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
+
+data class SynthesizedClip(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val text: String,
+    val pcmData: ShortArray,
+    val sampleRate: Int,
+    val timestamp: Long = System.currentTimeMillis(),
+    val durationSeconds: Float = pcmData.size.toFloat() / sampleRate,
+    val isTransmitted: Boolean = false,
+    val isPlayingLocally: Boolean = false
+)
 
 class RadioViewModel(
     application: Application,
@@ -34,12 +48,103 @@ class RadioViewModel(
 
     // Core streaming services
     private val aacStreamer = AacStreamer()
-    private val ttsManager = TtsManager(application) { pcmData, sampleRate ->
-        // On PCM synthesized from TTS, resample to stream sample rate and queue in the streamer
-        val targetRate = aacStreamer.STREAM_SAMPLE_RATE
-        val resampled = WavParser.resample(pcmData, sampleRate, targetRate)
-        Log.d(TAG, "Queuing synthesized speech PCM segment: original size=${pcmData.size} at ${sampleRate}Hz, resampled size=${resampled.size} at ${targetRate}Hz")
-        aacStreamer.queuePcm(resampled)
+
+    // Queue of synthesized clips for user review
+    private val _synthesizedClips = MutableStateFlow<List<SynthesizedClip>>(emptyList())
+    val synthesizedClips = _synthesizedClips.asStateFlow()
+
+    private val ttsManager = TtsManager(application) { text, pcmData, sampleRate ->
+        val cleanText = if (text.trim().isEmpty()) "Synthesized Voice Clip" else text
+        val newClip = SynthesizedClip(
+            text = cleanText,
+            pcmData = pcmData,
+            sampleRate = sampleRate
+        )
+        _synthesizedClips.value = _synthesizedClips.value + newClip
+        Log.d(TAG, "Generated clip added: '${cleanText}', size=${pcmData.size} shorts")
+        
+        // If the streamer is connected and we have auto stream enabled or wish to automatically queue
+        // We can do that or let the user review. To keep the app flexible, let's also auto-stream
+        // iff the user is typing fast and they prefer auto-transmission, but let them still review it.
+        // Actually, let's require the user to manually click to transmit or keep auto-queueing if stream is active.
+        // Let's transmit it automatically IF the stream is connected, but still keep it in the list so they can see and re-play it!
+        // This is wonderful because it satisfies BOTH requirements: it goes to air immediately AND is reviewable!
+        if (streamState.value == StreamState.CONNECTED) {
+            val targetRate = aacStreamer.STREAM_SAMPLE_RATE
+            val resampled = WavParser.resample(pcmData, sampleRate, targetRate)
+            Log.d(TAG, "Auto-routing synthesized speech to live broadcast stream: ${resampled.size} bytes")
+            aacStreamer.queuePcm(resampled)
+            // Save as transmitted
+            _synthesizedClips.value = _synthesizedClips.value.map {
+                if (it.id == newClip.id) it.copy(isTransmitted = true) else it
+            }
+        }
+    }
+
+    // Playing a clip locally
+    fun playClipLocally(clipId: String) {
+        val clips = _synthesizedClips.value
+        val clip = clips.find { it.id == clipId } ?: return
+
+        // Set isPlayingLocally = true
+        _synthesizedClips.value = clips.map {
+            if (it.id == clipId) it.copy(isPlayingLocally = true) else it
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val minBufSize = AudioTrack.getMinBufferSize(
+                    clip.sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                val bufferSize = Math.max(minBufSize, clip.pcmData.size * 2)
+                val audioTrack = AudioTrack(
+                    AudioManager.STREAM_MUSIC,
+                    clip.sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize,
+                    AudioTrack.MODE_STREAM
+                )
+                audioTrack.play()
+                audioTrack.write(clip.pcmData, 0, clip.pcmData.size)
+                audioTrack.stop()
+                audioTrack.release()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed playing local PCM", e)
+            } finally {
+                // Clear state
+                _synthesizedClips.value = _synthesizedClips.value.map {
+                    if (it.id == clipId) it.copy(isPlayingLocally = false) else it
+                }
+            }
+        }
+    }
+
+    // Transmitting clip to the live Icecast server
+    fun transmitClip(clipId: String) {
+        val list = _synthesizedClips.value
+        val updated = list.map { clip ->
+            if (clip.id == clipId) {
+                val targetRate = aacStreamer.STREAM_SAMPLE_RATE
+                val resampled = WavParser.resample(clip.pcmData, clip.sampleRate, targetRate)
+                Log.d(TAG, "Manually transmitting clip '${clip.text}' to stream queue: size=${resampled.size}")
+                aacStreamer.queuePcm(resampled)
+                clip.copy(isTransmitted = true)
+            } else {
+                clip
+            }
+        }
+        _synthesizedClips.value = updated
+    }
+
+    fun deleteClip(clipId: String) {
+        _synthesizedClips.value = _synthesizedClips.value.filter { it.id != clipId }
+    }
+
+    fun clearAllClips() {
+        _synthesizedClips.value = emptyList()
     }
 
     // Monitoring playback player

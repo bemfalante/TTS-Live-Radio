@@ -12,8 +12,9 @@ import java.util.Locale
 
 class TtsManager(
     private val context: Context,
-    private val onPcmSynthesized: (ShortArray, Int) -> Unit
+    private val onPcmSynthesized: (text: String, pcmData: ShortArray, sampleRate: Int) -> Unit
 ) : TextToSpeech.OnInitListener {
+    private val utteranceTextMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val TAG = "TtsManager"
     private var tts: TextToSpeech? = null
 
@@ -109,11 +110,12 @@ class TtsManager(
             override fun onDone(utteranceId: String?) {
                 Log.d(TAG, "TTS synthesis complete: $utteranceId")
                 if (utteranceId != null && utteranceId.startsWith("stream_")) {
+                    val text = utteranceTextMap.remove(utteranceId) ?: ""
                     val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
                     val info = WavParser.parseWav(uniqueFile)
                     if (info != null && info.pcmShorts.isNotEmpty()) {
                         Log.d(TAG, "Parsed WAV file successfully: $utteranceId, channels=${info.channels}, sampleRate=${info.sampleRate}, size=${info.pcmShorts.size}")
-                        onPcmSynthesized(info.pcmShorts, info.sampleRate)
+                        onPcmSynthesized(text, info.pcmShorts, info.sampleRate)
                     } else {
                         Log.e(TAG, "Failed or empty WAV file parsed for: $utteranceId, exists=${uniqueFile.exists()}, length=${uniqueFile.length()}")
                     }
@@ -152,10 +154,14 @@ class TtsManager(
         if (!_isInitialized.value) return
 
         try {
+            val selectedLocale = _currentLocale.value
+            val langResult = engine.setLanguage(selectedLocale)
+            Log.d(TAG, "Enforced language $selectedLocale with result code: $langResult")
             engine.setPitch(pitch)
             engine.setSpeechRate(speed)
 
             val utteranceId = "stream_${System.currentTimeMillis()}"
+            utteranceTextMap[utteranceId] = text
             val params = Bundle()
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
 
