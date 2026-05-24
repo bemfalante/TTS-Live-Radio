@@ -1753,25 +1753,41 @@ fun HistoryAndPresetsBoard(
                 }
             }
 
-            LazyRow(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(history) { record ->
+                // Show up to 15 recent items, newest on top
+                history.reversed().take(15).forEach { record ->
                     Surface(
                         color = Color(0xFFF3F4F9),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E3E1)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.clickable { onPhraseClick(record.text) }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPhraseClick(record.text) }
                     ) {
-                        Text(
-                            text = record.text,
-                            maxLines = 1,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF49454F),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = record.text,
+                                maxLines = 2,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF1C1B1F),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Repetir",
+                                tint = Color(0xFF6750A4),
+                                modifier = Modifier.size(16.dp).padding(start = 4.dp)
+                            )
+                        }
                     }
                 }
             }

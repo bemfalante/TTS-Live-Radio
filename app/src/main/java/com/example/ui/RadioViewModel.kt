@@ -92,31 +92,47 @@ class RadioViewModel(
         }
 
         viewModelScope.launch(Dispatchers.IO) {
+            var audioTrack: AudioTrack? = null
             try {
-                val bufferSize = clip.pcmData.size * 2
-                val audioTrack = AudioTrack(
+                val minBufSize = AudioTrack.getMinBufferSize(
+                    clip.sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                val bufferSize = Math.max(minBufSize, 4096)
+                audioTrack = AudioTrack(
                     AudioManager.STREAM_MUSIC,
                     clip.sampleRate,
                     AudioFormat.CHANNEL_OUT_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     bufferSize,
-                    AudioTrack.MODE_STATIC
+                    AudioTrack.MODE_STREAM
                 )
-                val written = audioTrack.write(clip.pcmData, 0, clip.pcmData.size)
-                Log.d(TAG, "AudioTrack written $written samples in MODE_STATIC. Playing...")
+                
                 audioTrack.play()
                 
-                // Sleep matching clip duration + small buffer (e.g. 200ms) to allow full playback drain
-                val durationMs = (clip.pcmData.size.toFloat() / clip.sampleRate * 1000).toLong()
-                Thread.sleep(Math.max(200L, durationMs + 200L))
+                val pcm = clip.pcmData
+                var offset = 0
+                val chunkSize = 2048
+                while (offset < pcm.size) {
+                    val length = Math.min(chunkSize, pcm.size - offset)
+                    audioTrack.write(pcm, offset, length)
+                    offset += length
+                }
                 
-                try {
-                    audioTrack.stop()
-                } catch (ignored: Exception) {}
-                audioTrack.release()
+                // Wait for playback to finish playing the written data
+                val playDurationMs = (pcm.size.toFloat() / clip.sampleRate * 1000).toLong()
+                Thread.sleep(Math.max(100L, playDurationMs + 100L))
             } catch (e: Exception) {
-                Log.e(TAG, "Failed playing local PCM", e)
+                Log.e(TAG, "AudioTrack playing failed, falling back to TTS directly", e)
+                // Fallback to TTS directly!
+                ttsManager.speakLocally(clip.text, _pitch.value, _speed.value)
             } finally {
+                try {
+                    audioTrack?.stop()
+                    audioTrack?.release()
+                } catch (ignored: Exception) {}
+                
                 // Clear state
                 _synthesizedClips.value = _synthesizedClips.value.map {
                     if (it.id == clipId) it.copy(isPlayingLocally = false) else it
@@ -253,7 +269,7 @@ class RadioViewModel(
         if (streamState.value != StreamState.CONNECTED) {
             Log.w(TAG, "Tts synthesis suppressed since radio is not connected")
             // Make a local monitoring speech voice cue anyway so that they know they aren't on stream
-            ttsManager.speak(phrase, pitch.value, speed.value, localMonitor = true)
+            ttsManager.speakLocally(phrase, pitch.value, speed.value)
             return
         }
 
