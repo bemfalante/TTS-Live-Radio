@@ -33,7 +33,7 @@ object WavParser {
             var dataSize = 0
 
             while (offset + 8 <= bytes.size) {
-                val chunkId = String(bytes, offset, 4)
+                val chunkId = String(bytes, offset, 4, Charsets.US_ASCII)
                 val chunkSize = readIntLE(bytes, offset + 4)
                 offset += 8
 

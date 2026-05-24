@@ -286,6 +286,12 @@ class RadioViewModel(
         ttsManager.setLanguage(locale)
     }
 
+    val useWebTts = ttsManager.useWebTts
+
+    fun setUseWebTts(enabled: Boolean) {
+        ttsManager.setUseWebTts(enabled)
+    }
+
     fun updateVoiceTuning(pitch: Float, speed: Float) {
         _pitch.value = pitch
         _speed.value = speed

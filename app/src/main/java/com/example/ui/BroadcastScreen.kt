@@ -60,6 +60,7 @@ fun BroadcastScreen(
     val isTtsInitialized by viewModel.isTtsInitialized.collectAsStateWithLifecycle()
     val availableLocales by viewModel.availableLocales.collectAsStateWithLifecycle()
     val currentLocale by viewModel.currentLocale.collectAsStateWithLifecycle()
+    val useWebTts by viewModel.useWebTts.collectAsStateWithLifecycle()
 
     val isLiveMonitoring by viewModel.isLiveMonitoring.collectAsStateWithLifecycle()
     val localMonitorError by viewModel.localMonitorError.collectAsStateWithLifecycle()
@@ -238,6 +239,8 @@ fun BroadcastScreen(
                 speed = speed,
                 expanded = localeSelectorExpanded,
                 selectedLocaleText = selectedLocaleText,
+                useWebTts = useWebTts,
+                onUseWebTtsChange = { viewModel.setUseWebTts(it) },
                 onLanguageChange = { locale ->
                     selectedLocaleText = locale.displayName
                     viewModel.setLanguage(locale)
@@ -776,6 +779,8 @@ fun VoiceSettingsCard(
     speed: Float,
     expanded: Boolean,
     selectedLocaleText: String,
+    useWebTts: Boolean,
+    onUseWebTtsChange: (Boolean) -> Unit,
     onLanguageChange: (Locale) -> Unit,
     onLocaleSelectorToggle: () -> Unit,
     onTuningChange: (Float, Float) -> Unit
@@ -801,6 +806,40 @@ fun VoiceSettingsCard(
                 fontSize = 14.sp,
                 color = Color(0xFF1C1B1F)
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF4F3F9), shape = RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "Voz Inteligente Web Alta Fidelidade",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF21005D)
+                    )
+                    Text(
+                        text = "Voz ultra-natural e profissional em português brasileiro (Recomendado)",
+                        fontSize = 11.sp,
+                        color = Color(0xFF6750A4),
+                        lineHeight = 14.sp
+                    )
+                }
+                Switch(
+                    checked = useWebTts,
+                    onCheckedChange = onUseWebTtsChange,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF6750A4),
+                        uncheckedThumbColor = Color(0xFF938F99),
+                        uncheckedTrackColor = Color(0xFFF3F4F9)
+                    )
+                )
+            }
 
             if (!isTtsInitialized) {
                 Text(
@@ -839,20 +878,43 @@ fun VoiceSettingsCard(
                         }
                     }
 
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = onLocaleSelectorToggle,
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .heightIn(max = 280.dp)
-                            .background(Color.White)
-                    ) {
-                        availableLocales.forEach { locale ->
-                            DropdownMenuItem(
-                                text = { Text(locale.displayName, fontSize = 14.sp, fontWeight = FontWeight.Normal, color = Color(0xFF1C1B1F)) },
-                                onClick = { onLanguageChange(locale) }
-                            )
-                        }
+                    if (expanded) {
+                        AlertDialog(
+                            onDismissRequest = onLocaleSelectorToggle,
+                            title = { Text("Selecione o Idioma / Select Language", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F)) },
+                            text = {
+                                androidx.compose.foundation.lazy.LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(availableLocales) { locale ->
+                                        val isSelected = locale.language == currentLocale.language && locale.country == currentLocale.country
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { onLanguageChange(locale) },
+                                            color = if (isSelected) Color(0xFFEADDFF) else Color.Transparent,
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text(
+                                                text = locale.displayName,
+                                                fontSize = 14.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) Color(0xFF21005D) else Color(0xFF1C1B1F),
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = onLocaleSelectorToggle) {
+                                    Text("Fechar / Close", fontWeight = FontWeight.Bold, color = Color(0xFF6750A4))
+                                }
+                            },
+                            containerColor = Color.White,
+                            shape = RoundedCornerShape(24.dp)
+                        )
                     }
                 }
 
@@ -1434,11 +1496,12 @@ fun TypingConsoleCard(
                                 )
                         )
                         Text(
-                            text = if (streamState == StreamState.CONNECTED) "COMPARTILHANDO ONLINE" else "MONITOR LOCAL",
+                            text = if (streamState == StreamState.CONNECTED) "AO VIVO (STREAM)" else "PRÉ-ESCUTA",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (streamState == StreamState.CONNECTED) Color(0xFFB3261E) else Color(0xFF49454F),
-                            maxLines = 1
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -1448,6 +1511,7 @@ fun TypingConsoleCard(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF938F99),
                         maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(start = 8.dp)
                     )
                 }

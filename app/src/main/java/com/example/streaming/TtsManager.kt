@@ -1,13 +1,22 @@
 package com.example.streaming
 
 import android.content.Context
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 import java.util.Locale
 
 class TtsManager(
@@ -17,6 +26,9 @@ class TtsManager(
     private val utteranceTextMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val TAG = "TtsManager"
     private var tts: TextToSpeech? = null
+    private var engineUsed = "com.google.android.tts"
+
+    private val scope = CoroutineScope(Dispatchers.IO)
 
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized = _isInitialized.asStateFlow()
@@ -27,8 +39,35 @@ class TtsManager(
     private val _currentLocale = MutableStateFlow(Locale("pt", "BR"))
     val currentLocale = _currentLocale.asStateFlow()
 
+    // Highly reliable high-quality Google Web TTS voice fallback toggle
+    private val _useWebTts = MutableStateFlow(true)
+    val useWebTts = _useWebTts.asStateFlow()
+
     init {
-        tts = TextToSpeech(context.applicationContext, this)
+        initTts(true)
+    }
+
+    private fun initTts(tryGoogleFirst: Boolean) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                if (tryGoogleFirst) {
+                    engineUsed = "com.google.android.tts"
+                    tts = TextToSpeech(context.applicationContext, this, "com.google.android.tts")
+                    Log.d(TAG, "Trying to initialize Google TTS engine")
+                } else {
+                    engineUsed = "default"
+                    tts = TextToSpeech(context.applicationContext, this)
+                    Log.d(TAG, "Trying to initialize system default TTS engine")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating TextToSpeech", e)
+                if (tryGoogleFirst) {
+                    initTts(false)
+                } else {
+                    _isInitialized.value = true
+                }
+            }
+        }
     }
 
     override fun onInit(status: Int) {
@@ -36,25 +75,23 @@ class TtsManager(
             if (status == TextToSpeech.SUCCESS) {
                 val engine = tts
                 if (engine != null) {
-                    // Discover languages safely and rapidly
+                    Log.d(TAG, "TTS engine initialized successfully (Engine: $engineUsed)")
+                    
+                    // Discover languages
                     val locales = mutableListOf<Locale>()
                     try {
                         val available = engine.availableLanguages
                         if (available != null && available.isNotEmpty()) {
                             locales.addAll(available)
                         } else {
-                            // Fallback to testing only standard common languages to avoid long loops
-                            val commonLocales = listOf(
-                                Locale("pt", "BR"),
-                                Locale.US, Locale.UK, Locale.CANADA, 
-                                Locale.FRANCE, Locale.GERMANY, Locale.ITALY, 
-                                Locale.CHINESE, Locale.JAPANESE, Locale.KOREAN,
-                                Locale("es", "ES")
+                            val common = listOf(
+                                Locale("pt", "BR"), Locale.US, Locale.UK, Locale.CANADA,
+                                Locale.FRANCE, Locale.GERMANY, Locale.ITALY, Locale("es", "ES")
                             )
-                            for (locale in commonLocales) {
-                                val availability = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
-                                if (availability >= TextToSpeech.LANG_AVAILABLE) {
-                                    locales.add(locale)
+                            for (l in common) {
+                                val check = try { engine.isLanguageAvailable(l) } catch (e: Exception) { -1 }
+                                if (check >= TextToSpeech.LANG_AVAILABLE) {
+                                    locales.add(l)
                                 }
                             }
                         }
@@ -62,9 +99,9 @@ class TtsManager(
                         Log.e(TAG, "Error checking languages", e)
                     }
 
-                    // Ensure Portuguese (Brazil) and English (US) are ALWAYS in the available locales list!
-                    val forcedLocales = listOf(Locale("pt", "BR"), Locale.US)
-                    for (l in forcedLocales) {
+                    // Always ensure Portuguese (Brazil) and US English are visible options
+                    val forced = listOf(Locale("pt", "BR"), Locale.US)
+                    for (l in forced) {
                         if (!locales.any { it.language == l.language && it.country == l.country }) {
                             locales.add(l)
                         }
@@ -73,24 +110,51 @@ class TtsManager(
                     _availableLocales.value = locales.sortedBy { it.displayName }
                     _isInitialized.value = true
 
-                    // Setup Portuguese (Brazil) as default TTS language
+                    // Setup accurate language matching with fallback
+                    val sysLocale = Locale.getDefault()
                     val ptBr = Locale("pt", "BR")
-                    try {
-                        engine.language = ptBr
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed setting language to pt-BR in engine", e)
+                    var bestLocale = sysLocale
+
+                    val sysAvailability = try { engine.isLanguageAvailable(sysLocale) } catch (e: Exception) { -1 }
+                    val ptBrAvailability = try { engine.isLanguageAvailable(ptBr) } catch (e: Exception) { -1 }
+
+                    if (sysLocale.language == "pt" && sysAvailability >= TextToSpeech.LANG_AVAILABLE) {
+                        bestLocale = sysLocale
+                    } else if (ptBrAvailability >= TextToSpeech.LANG_AVAILABLE) {
+                        bestLocale = ptBr
+                    } else {
+                        val ptGen = Locale("pt")
+                        val ptGenAvailability = try { engine.isLanguageAvailable(ptGen) } catch (e: Exception) { -1 }
+                        if (ptGenAvailability >= TextToSpeech.LANG_AVAILABLE) {
+                            bestLocale = ptGen
+                        } else {
+                            val defaultLocale = try { engine.language } catch (e: Exception) { null }
+                            bestLocale = defaultLocale ?: Locale.US
+                        }
                     }
-                    _currentLocale.value = ptBr
-                    Log.d(TAG, "Successfully configured Portuguese (Brazil) as default TTS language")
+
+                    try {
+                        engine.language = bestLocale
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Exception setting language onInit to $bestLocale", e)
+                    }
+                    _currentLocale.value = bestLocale
+                    Log.d(TAG, "Selected matching language: $bestLocale")
+
                     setupProgressListener()
                 } else {
-                    Log.e(TAG, "TTS engine is null in deferred onInit handler")
+                    Log.e(TAG, "TTS Engine was null inside onInit")
                     _isInitialized.value = true
                 }
             } else {
-                Log.e(TAG, "TTS Initialization failed with status: $status")
-                // Fallback to initialized so the UI is active and they can still try to type and speech trigger
-                _isInitialized.value = true
+                Log.e(TAG, "TTS Initialization failed: $status")
+                if (engineUsed == "com.google.android.tts") {
+                    Log.w(TAG, "Google TTS failed to initialize, retrying default system engine...")
+                    try { tts?.shutdown() } catch (e: Exception) {}
+                    initTts(false)
+                } else {
+                    _isInitialized.value = true
+                }
             }
         }
     }
@@ -98,22 +162,22 @@ class TtsManager(
     private fun setupProgressListener() {
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
-                Log.d(TAG, "TTS synthesis started: $utteranceId")
+                Log.d(TAG, "Local TTS synthesis started: $utteranceId")
             }
 
             override fun onDone(utteranceId: String?) {
-                Log.d(TAG, "TTS synthesis complete: $utteranceId")
+                Log.d(TAG, "Local TTS synthesis completed: $utteranceId")
                 if (utteranceId != null && utteranceId.startsWith("stream_")) {
                     val text = utteranceTextMap.remove(utteranceId) ?: ""
-                    val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
+                    val dir = context.externalCacheDir ?: context.cacheDir
+                    val uniqueFile = File(dir, "tts_${utteranceId}.wav")
                     val info = WavParser.parseWav(uniqueFile)
                     if (info != null && info.pcmShorts.isNotEmpty()) {
-                        Log.d(TAG, "Parsed WAV file successfully: $utteranceId, channels=${info.channels}, sampleRate=${info.sampleRate}, size=${info.pcmShorts.size}")
+                        Log.d(TAG, "Parsed WAV file successfully: chapters=${info.channels}, rate=${info.sampleRate}, length=${info.pcmShorts.size}")
                         onPcmSynthesized(text, info.pcmShorts, info.sampleRate)
                     } else {
-                        Log.e(TAG, "Failed or empty WAV file parsed for: $utteranceId, exists=${uniqueFile.exists()}, length=${uniqueFile.length()}")
+                        Log.e(TAG, "Failed or empty WAV file parsed from local engine: ${uniqueFile.name}")
                     }
-                    // Delete synthesized WAV file since it is already loaded in memory
                     try {
                         if (uniqueFile.exists()) {
                             uniqueFile.delete()
@@ -122,13 +186,13 @@ class TtsManager(
                 }
             }
 
-            @Deprecated("Deprecated in Java")
+            @Deprecated("Deprecated")
             override fun onError(utteranceId: String?) {
-                Log.e(TAG, "TTS synthesis error: $utteranceId")
+                Log.e(TAG, "Local TTS synthesis error: $utteranceId")
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                Log.e(TAG, "TTS synthesis error: $utteranceId, Code: $errorCode")
+                Log.e(TAG, "Local TTS synthesis error code: $errorCode for utterance: $utteranceId")
             }
         })
     }
@@ -136,8 +200,17 @@ class TtsManager(
     fun setLanguage(locale: Locale) {
         val engine = tts ?: return
         _currentLocale.value = locale
-        val result = try { engine.setLanguage(locale) } catch (e: Exception) { -1 }
-        Log.d(TAG, "setLanguage target: $locale, result code: $result")
+        try {
+            val result = engine.setLanguage(locale)
+            Log.d(TAG, "setLanguage called for: $locale, result code: $result")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in setLanguage", e)
+        }
+    }
+
+    fun setUseWebTts(enabled: Boolean) {
+        _useWebTts.value = enabled
+        Log.d(TAG, "setUseWebTts set to: $enabled")
     }
 
     fun speakLocally(
@@ -145,6 +218,11 @@ class TtsManager(
         pitch: Float = 1.0f,
         speed: Float = 1.0f
     ) {
+        if (_useWebTts.value) {
+            speakWithWebEngine(text, localMonitor = true)
+            return
+        }
+
         val engine = tts ?: return
         if (!_isInitialized.value) return
 
@@ -165,9 +243,9 @@ class TtsManager(
                 Log.e(TAG, "engine.speak locally failed", e)
                 -1
             }
-            Log.d(TAG, "speakLocally called with text: '$text', result: $result, lang: $selectedLocale")
+            Log.d(TAG, "speakLocally triggered text: '$text', result code: $result")
         } catch (e: Exception) {
-            Log.e(TAG, "speakLocally failed", e)
+            Log.e(TAG, "speakLocally exception", e)
         }
     }
 
@@ -177,6 +255,11 @@ class TtsManager(
         speed: Float = 1.0f,
         localMonitor: Boolean = true
     ) {
+        if (_useWebTts.value) {
+            speakWithWebEngine(text, localMonitor)
+            return
+        }
+
         val engine = tts ?: return
         if (!_isInitialized.value) return
 
@@ -187,7 +270,6 @@ class TtsManager(
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting language $selectedLocale", e)
             }
-            
             engine.setPitch(pitch)
             engine.setSpeechRate(speed)
 
@@ -196,21 +278,139 @@ class TtsManager(
             val params = Bundle()
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
 
-            val uniqueFile = File(context.cacheDir, "tts_${utteranceId}.wav")
-            val result = try { engine.synthesizeToFile(text, params, uniqueFile, utteranceId) } catch (e: Exception) { -1 }
-            Log.d(TAG, "synthesizeToFile returned: $result for text: '$text', file: ${uniqueFile.name}")
+            val dir = context.externalCacheDir ?: context.cacheDir
+            val uniqueFile = File(dir, "tts_${utteranceId}.wav")
+            
+            // Delete if exists before synthesizing as required by standard TTS
+            try {
+                if (uniqueFile.exists()) {
+                    uniqueFile.delete()
+                }
+            } catch (ignored: Exception) {}
 
-            // 2. Play on local speakers (speaker monitor status checklist)
+            val result = try {
+                engine.synthesizeToFile(text, params, uniqueFile, utteranceId)
+            } catch (e: Exception) {
+                Log.e(TAG, "synthesizeToFile exception", e)
+                -1
+            }
+            Log.d(TAG, "synthesizeToFile started: $result for text: '$text', file: ${uniqueFile.name}")
+
             if (localMonitor) {
                 val localUtteranceId = "local_${System.currentTimeMillis()}"
                 try {
                     engine.speak(text, TextToSpeech.QUEUE_ADD, null, localUtteranceId)
                 } catch (e: Exception) {
-                    Log.e(TAG, "engine.speak failed", e)
+                    Log.e(TAG, "engine.speak failed for local monitor", e)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "TTS error speaking text", e)
+        }
+    }
+
+    private fun speakWithWebEngine(text: String, localMonitor: Boolean) {
+        scope.launch {
+            try {
+                val utteranceId = "web_${System.currentTimeMillis()}"
+                val dir = context.externalCacheDir ?: context.cacheDir
+                val uniqueFile = File(dir, "tts_${utteranceId}.mp3")
+
+                Log.d(TAG, "Web TTS requested. Downloading track... text: '$text'")
+                val urlEncoded = URLEncoder.encode(text, "UTF-8")
+
+                // Map language to URL tags
+                val selectedLocale = _currentLocale.value
+                val langTag = if (selectedLocale.language == "pt") {
+                    if (selectedLocale.country == "PT") "pt-PT" else "pt-BR"
+                } else {
+                    selectedLocale.toLanguageTag()
+                }
+
+                val urlString = "https://translate.google.com/translate_tts?ie=UTF-8&tl=$langTag&client=tw-ob&q=$urlEncoded"
+                val url = URL(urlString)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                conn.connectTimeout = 7000
+                conn.readTimeout = 7000
+
+                if (conn.responseCode == 200) {
+                    conn.inputStream.use { input ->
+                        uniqueFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    Log.d(TAG, "Downloaded Web TTS successfully: ${uniqueFile.length()} bytes")
+
+                    // Decode standard MP3 stream to 16kHz PCM mono shorts
+                    val pcmData = AudioDecoder.decodeToPcm(uniqueFile, 16000)
+                    if (pcmData != null && pcmData.isNotEmpty()) {
+                        Log.d(TAG, "Decoded Web TTS to Mono PCM: ${pcmData.size} shorts")
+                        
+                        // Notify callback to stream or add to generated playlist reviews
+                        onPcmSynthesized(text, pcmData, 16000)
+
+                        if (localMonitor) {
+                            playPcmLocally(pcmData, 16000)
+                        }
+                    } else {
+                        Log.e(TAG, "Failed to decode MP3 file to PCM shorts")
+                    }
+                } else {
+                    Log.e(TAG, "Google Web API rejected request: HTTP Code ${conn.responseCode}")
+                }
+
+                try {
+                    if (uniqueFile.exists()) {
+                        uniqueFile.delete()
+                    }
+                } catch (ignored: Exception) {}
+            } catch (e: Exception) {
+                Log.e(TAG, "Web TTS query failed", e)
+            }
+        }
+    }
+
+    fun playPcmLocally(pcmData: ShortArray, sampleRate: Int) {
+        scope.launch {
+            var audioTrack: AudioTrack? = null
+            try {
+                val minBufSize = AudioTrack.getMinBufferSize(
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                val bufferSize = Math.max(minBufSize, 4096)
+                audioTrack = AudioTrack(
+                    AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize,
+                    AudioTrack.MODE_STREAM
+                )
+
+                audioTrack.play()
+
+                var offset = 0
+                val chunkSize = 2048
+                while (offset < pcmData.size) {
+                    val length = Math.min(chunkSize, pcmData.size - offset)
+                    audioTrack.write(pcmData, offset, length)
+                    offset += length
+                }
+
+                val playDurationMs = (pcmData.size.toFloat() / sampleRate * 1000).toLong()
+                Thread.sleep(Math.max(100L, playDurationMs + 100L))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error playing PCM audio track locally", e)
+            } finally {
+                try {
+                    audioTrack?.stop()
+                    audioTrack?.release()
+                } catch (ignored: Exception) {}
+            }
         }
     }
 
