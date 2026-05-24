@@ -36,14 +36,25 @@ class TtsManager(
         if (status == TextToSpeech.SUCCESS) {
             val engine = tts
             if (engine != null) {
-                // Discover languages
+                // Discover languages safely and rapidly
                 val locales = mutableListOf<Locale>()
                 try {
-                    val available = Locale.getAvailableLocales()
-                    for (locale in available) {
-                        val isLang = engine.isLanguageAvailable(locale)
-                        if (isLang >= TextToSpeech.LANG_AVAILABLE) {
-                            locales.add(locale)
+                    val available = engine.availableLanguages
+                    if (available != null && available.isNotEmpty()) {
+                        locales.addAll(available)
+                    } else {
+                        // Fallback to testing only standard common languages to avoid long loops
+                        val commonLocales = listOf(
+                            Locale.US, Locale.UK, Locale.CANADA, 
+                            Locale.FRANCE, Locale.GERMANY, Locale.ITALY, 
+                            Locale.CHINESE, Locale.JAPANESE, Locale.KOREAN,
+                            Locale("pt", "BR"), Locale("es", "ES")
+                        )
+                        for (locale in commonLocales) {
+                            val availability = try { engine.isLanguageAvailable(locale) } catch (e: Exception) { -1 }
+                            if (availability >= TextToSpeech.LANG_AVAILABLE) {
+                                locales.add(locale)
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -58,12 +69,20 @@ class TtsManager(
                 _availableLocales.value = locales.sortedBy { it.displayName }
                 _isInitialized.value = true
 
-                // Default setup
-                engine.language = Locale.US
+                // Default setup - use default locale if available, else standard US
+                val defaultLocale = Locale.getDefault()
+                val defaultAvailable = try { engine.isLanguageAvailable(defaultLocale) } catch (e: Exception) { -1 }
+                if (defaultAvailable >= TextToSpeech.LANG_AVAILABLE) {
+                    engine.language = defaultLocale
+                    _currentLocale.value = defaultLocale
+                } else {
+                    engine.language = Locale.US
+                    _currentLocale.value = Locale.US
+                }
                 setupProgressListener()
             }
         } else {
-            Log.e(TAG, "TTS Initialization failed")
+            Log.e(TAG, "TTS Initialization failed with status: $status")
         }
     }
 
