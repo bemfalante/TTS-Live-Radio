@@ -81,6 +81,14 @@ fun BroadcastScreen(
         }
     }
 
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importAudioUri(uri)
+        }
+    }
+
     // local UI states
     var showSettings by remember { mutableStateOf(false) }
     var tempHost by remember { mutableStateOf(radioSettings.host) }
@@ -380,7 +388,8 @@ fun BroadcastScreen(
                 onPlayLocally = { viewModel.playClipLocally(it) },
                 onTransmit = { viewModel.transmitClip(it) },
                 onDelete = { viewModel.deleteClip(it) },
-                onClearAll = { viewModel.clearAllClips() }
+                onClearAll = { viewModel.clearAllClips() },
+                onPickAudioFile = { audioPickerLauncher.launch("audio/*") }
             )
 
             // 6. Broadcast History and Common Presets List
@@ -1962,7 +1971,8 @@ fun TtsClipReviewBoard(
     onPlayLocally: (String) -> Unit,
     onTransmit: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    onPickAudioFile: () -> Unit
 ) {
     if (clips.isEmpty()) {
         Card(
@@ -2001,6 +2011,19 @@ fun TtsClipReviewBoard(
                     lineHeight = 16.sp,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                OutlinedButton(
+                    onClick = onPickAudioFile,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFF6750A4)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6750A4)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("📁 SELECIONAR ÁUDIO DO CELULAR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
         return
@@ -2026,23 +2049,34 @@ fun TtsClipReviewBoard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "GERADOR DE ÁUDIO & MONITOR (PRÉ-ESCUTA)",
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = Color(0xFF6750A4),
                         letterSpacing = 1.sp
                     )
                     Text(
-                        text = "Lista de vozes geradas para testar e botar no ar",
+                        text = "Lista de vozes ou arquivos de áudio importados",
                         fontSize = 11.sp,
                         color = Color(0xFF938F99)
                     )
                 }
 
-                TextButton(onClick = onClearAll) {
-                    Text("Deletar Todos", fontSize = 12.sp, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onPickAudioFile,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Text("📁", fontSize = 18.sp)
+                    }
+                    TextButton(onClick = onClearAll) {
+                        Text("Deletar Todos", fontSize = 12.sp, color = Color(0xFFB3261E), fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 

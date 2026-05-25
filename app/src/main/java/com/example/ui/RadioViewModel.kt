@@ -408,6 +408,45 @@ class RadioViewModel(
         }
     }
 
+    fun importAudioUri(uri: android.net.Uri) {
+        _isImporting.value = true
+        _importError.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val context = getApplication<Application>()
+                var displayName = "ArquivoSelecionado.mp3"
+                val cursor = context.contentResolver.query(uri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex >= 0) {
+                            val nameValue = it.getString(nameIndex)
+                            if (!nameValue.isNullOrEmpty()) {
+                                displayName = nameValue
+                            }
+                        }
+                    }
+                }
+
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    val tempFile = java.io.File(context.cacheDir, "picked_${System.currentTimeMillis()}_${displayName.replace(" ", "_")}")
+                    tempFile.outputStream().use { output ->
+                        inputStream.copyTo(output)
+                    }
+                    importSharedAudio(tempFile, displayName)
+                } else {
+                    _importError.value = "Não foi possível abrir o arquivo selecionado."
+                    _isImporting.value = false
+                }
+            } catch (e: Exception) {
+                _importError.value = "Erro ao processar arquivo selecionado: ${e.message}"
+                _isImporting.value = false
+                Log.e(TAG, "Error importing audio uri", e)
+            }
+        }
+    }
+
     fun clearImportError() {
         _importError.value = null
     }
