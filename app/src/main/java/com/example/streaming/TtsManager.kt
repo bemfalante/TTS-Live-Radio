@@ -218,10 +218,11 @@ class TtsManager(
         engine: String = "WEB",
         voiceName: String = "Kore",
         pitch: Float = 1.0f,
-        speed: Float = 1.0f
+        speed: Float = 1.0f,
+        geminiApiKey: String = ""
     ) {
         if (engine == "GEMINI") {
-            speakWithGeminiEngine(text, voiceName, localMonitor = true)
+            speakWithGeminiEngine(text, voiceName, localMonitor = true, geminiApiKey = geminiApiKey)
             return
         }
         if (engine == "WEB") {
@@ -261,10 +262,11 @@ class TtsManager(
         voiceName: String = "Kore",
         pitch: Float = 1.0f,
         speed: Float = 1.0f,
-        localMonitor: Boolean = true
+        localMonitor: Boolean = true,
+        geminiApiKey: String = ""
     ) {
         if (engine == "GEMINI") {
-            speakWithGeminiEngine(text, voiceName, localMonitor)
+            speakWithGeminiEngine(text, voiceName, localMonitor, geminiApiKey = geminiApiKey)
             return
         }
         if (engine == "WEB") {
@@ -321,7 +323,7 @@ class TtsManager(
         }
     }
 
-    private fun speakWithGeminiEngine(text: String, voiceName: String, localMonitor: Boolean) {
+    private fun speakWithGeminiEngine(text: String, voiceName: String, localMonitor: Boolean, geminiApiKey: String) {
         scope.launch {
             try {
                 val utteranceId = "gemini_${System.currentTimeMillis()}"
@@ -360,9 +362,13 @@ class TtsManager(
                     }
                 """.trimIndent()
 
-                val apiKey = com.example.BuildConfig.GEMINI_API_KEY
+                var apiKey = geminiApiKey.trim()
+                if (apiKey.isEmpty()) {
+                    apiKey = com.example.BuildConfig.GEMINI_API_KEY
+                }
+
                 if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-                    Log.e(TAG, "Gemini API Key is empty or placeholder! Please ensure you have set GEMINI_API_KEY in the Secrets panel.")
+                    Log.e(TAG, "Gemini API Key is empty or placeholder! Please ensure you have set GEMINI_API_KEY in App Settings.")
                     speakWithWebEngine(text, localMonitor)
                     return@launch
                 }

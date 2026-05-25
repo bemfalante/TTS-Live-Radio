@@ -14,7 +14,8 @@ data class RadioSettings(
     val autoStreamOnSpace: Boolean = true,
     val localVoiceMonitor: Boolean = true,
     val ttsEngine: String = "WEB", // "WEB", "LOCAL", "GEMINI"
-    val geminiVoice: String = "Kore" // "Puck", "Charon", "Kore", "Fenrir", "Aoede"
+    val geminiVoice: String = "Kore", // "Puck", "Charon", "Kore", "Fenrir", "Aoede"
+    val geminiApiKey: String = ""
 )
 
 @Entity(tableName = "broadcast_history")

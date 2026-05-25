@@ -1,5 +1,7 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
@@ -27,6 +29,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +72,15 @@ fun BroadcastScreen(
     val isImporting by viewModel.isImporting.collectAsStateWithLifecycle()
     val importError by viewModel.importError.collectAsStateWithLifecycle()
 
+    val isMicActive by viewModel.isMicActive.collectAsStateWithLifecycle()
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.toggleMicStream()
+        }
+    }
+
     // local UI states
     var showSettings by remember { mutableStateOf(false) }
     var tempHost by remember { mutableStateOf(radioSettings.host) }
@@ -80,6 +92,7 @@ fun BroadcastScreen(
     var tempLocalMonitor by remember { mutableStateOf(radioSettings.localVoiceMonitor) }
     var tempTtsEngine by remember { mutableStateOf(radioSettings.ttsEngine) }
     var tempGeminiVoice by remember { mutableStateOf(radioSettings.geminiVoice) }
+    var tempGeminiApiKey by remember { mutableStateOf(radioSettings.geminiApiKey) }
 
     var selectedLocaleText by remember(currentLocale) { mutableStateOf(currentLocale.displayName) }
     var localeSelectorExpanded by remember { mutableStateOf(false) }
@@ -95,6 +108,7 @@ fun BroadcastScreen(
         tempLocalMonitor = radioSettings.localVoiceMonitor
         tempTtsEngine = radioSettings.ttsEngine
         tempGeminiVoice = radioSettings.geminiVoice
+        tempGeminiApiKey = radioSettings.geminiApiKey
     }
 
     if (showSettings) {
@@ -108,6 +122,7 @@ fun BroadcastScreen(
             localMonitor = tempLocalMonitor,
             ttsEngine = tempTtsEngine,
             geminiVoice = tempGeminiVoice,
+            geminiApiKey = tempGeminiApiKey,
             onHostChange = { tempHost = it },
             onPortChange = { tempPort = it },
             onMountChange = { tempMountpoint = it },
@@ -117,6 +132,7 @@ fun BroadcastScreen(
             onLocalMonitorToggle = { tempLocalMonitor = it },
             onTtsEngineChange = { tempTtsEngine = it },
             onGeminiVoiceChange = { tempGeminiVoice = it },
+            onGeminiApiKeyChange = { tempGeminiApiKey = it },
             onSave = {
                 val parsedPort = tempPort.toIntOrNull() ?: 80
                 viewModel.saveSettings(
@@ -129,7 +145,8 @@ fun BroadcastScreen(
                         autoStreamOnSpace = tempAutoStream,
                         localVoiceMonitor = tempLocalMonitor,
                         ttsEngine = tempTtsEngine,
-                        geminiVoice = tempGeminiVoice
+                        geminiVoice = tempGeminiVoice,
+                        geminiApiKey = tempGeminiApiKey
                     )
                 )
                 showSettings = false
@@ -306,8 +323,16 @@ fun BroadcastScreen(
             StatusControlCard(
                 streamState = streamState,
                 error = streamerError,
+                isMicActive = isMicActive,
                 onConnectClick = { viewModel.connectStream() },
-                onDisconnectClick = { viewModel.disconnectStream() }
+                onDisconnectClick = { viewModel.disconnectStream() },
+                onMicToggleClick = {
+                    if (viewModel.checkRecordPermission()) {
+                        viewModel.toggleMicStream()
+                    } else {
+                        micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                    }
+                }
             )
 
             // 2. Waveform Meter Indicator
@@ -391,8 +416,10 @@ fun BroadcastScreen(
 fun StatusControlCard(
     streamState: StreamState,
     error: String?,
+    isMicActive: Boolean,
     onConnectClick: () -> Unit,
-    onDisconnectClick: () -> Unit
+    onDisconnectClick: () -> Unit,
+    onMicToggleClick: () -> Unit
 ) {
     val statusColor by animateColorAsState(
         targetValue = when (streamState) {
@@ -533,6 +560,98 @@ fun StatusControlCard(
                         Spacer(modifier = Modifier.width(10.dp))
                         Text("Stop Streaming", fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
                     }
+                }
+            }
+
+            // Microphone streaming controller option
+            if (streamState == StreamState.CONNECTED) {
+                HorizontalDivider(color = Color(0xFFE1E3E1), thickness = 1.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    color = if (isMicActive) Color(0xFFB3261E).copy(alpha = 0.1f) else Color(0xFF49454F).copy(alpha = 0.1f),
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Canvas(modifier = Modifier.size(16.dp)) {
+                                val strokeWidth = 2.dp.toPx()
+                                val micColor = if (isMicActive) Color(0xFFB3261E) else Color(0xFF49454F)
+
+                                // Draw the mic body (central pill)
+                                drawRoundRect(
+                                    color = micColor,
+                                    topLeft = Offset(size.width * 0.35f, size.height * 0.15f),
+                                    size = Size(size.width * 0.3f, size.height * 0.5f),
+                                    cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
+                                )
+
+                                // Draw the outer cradle (U-shape)
+                                drawArc(
+                                    color = micColor,
+                                    startAngle = 0f,
+                                    sweepAngle = 180f,
+                                    useCenter = false,
+                                    topLeft = Offset(size.width * 0.2f, size.height * 0.22f),
+                                    size = Size(size.width * 0.6f, size.height * 0.5f),
+                                    style = Stroke(width = strokeWidth)
+                                )
+
+                                // Draw vertical connector stand line
+                                drawLine(
+                                    color = micColor,
+                                    start = Offset(size.width * 0.5f, size.height * 0.72f),
+                                    end = Offset(size.width * 0.5f, size.height * 0.95f),
+                                    strokeWidth = strokeWidth
+                                )
+
+                                // If not active, draw a slash through it (mic muted)
+                                if (!isMicActive) {
+                                    drawLine(
+                                        color = micColor,
+                                        start = Offset(0f, size.height),
+                                        end = Offset(size.width, 0f),
+                                        strokeWidth = strokeWidth
+                                    )
+                                }
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Streaming Mic Live Accent",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1C1B1F)
+                            )
+                            Text(
+                                text = if (isMicActive) "Sua voz está AO VIVO na rádio" else "Microfone mutado",
+                                fontSize = 11.sp,
+                                color = if (isMicActive) Color(0xFFB3261E) else Color(0xFF49454F)
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isMicActive,
+                        onCheckedChange = { onMicToggleClick() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF6750A4),
+                            uncheckedThumbColor = Color(0xFF49454F),
+                            uncheckedTrackColor = Color(0xFFE1E3E1)
+                        ),
+                        modifier = Modifier.testTag("mic_toggle_switch")
+                    )
                 }
             }
         }
@@ -687,6 +806,7 @@ fun ServerSettingsScreen(
     localMonitor: Boolean,
     ttsEngine: String,
     geminiVoice: String,
+    geminiApiKey: String,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
     onMountChange: (String) -> Unit,
@@ -696,6 +816,7 @@ fun ServerSettingsScreen(
     onLocalMonitorToggle: (Boolean) -> Unit,
     onTtsEngineChange: (String) -> Unit,
     onGeminiVoiceChange: (String) -> Unit,
+    onGeminiApiKeyChange: (String) -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
     onPreFillDemo: () -> Unit
@@ -973,6 +1094,30 @@ fun ServerSettingsScreen(
                                 color = Color(0xFF49454F),
                                 style = androidx.compose.ui.text.TextStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                             )
+
+                            HorizontalDivider(color = Color(0xFFE1E3E1), thickness = 1.dp)
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Chave de API do Gemini (Google AI Studio Key)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1C1B1F))
+                                OutlinedTextField(
+                                    value = geminiApiKey,
+                                    onValueChange = onGeminiApiKeyChange,
+                                    placeholder = { Text("Cole sua AI Studio Key aqui...", fontSize = 13.sp, color = Color.Gray) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().testTag("gemini_api_key_input"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFF6750A4),
+                                        unfocusedBorderColor = Color(0xFFE1E3E1)
+                                    )
+                                )
+                                Text(
+                                    text = "Essa chave é salva com total segurança e de forma privada localmente em seu dispositivo.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF6750A4),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

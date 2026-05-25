@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.RadioRepository
 import com.example.data.RadioSettings
 import com.example.streaming.AacStreamer
+import com.example.streaming.MicManager
 import com.example.streaming.StreamState
 import com.example.streaming.TtsManager
 import com.example.streaming.WavParser
@@ -48,6 +49,14 @@ class RadioViewModel(
 
     // Core streaming services
     private val aacStreamer = AacStreamer()
+
+    // Direct mic streaming capturing manager
+    private val micManager = MicManager(application) { chunk ->
+        if (streamState.value == StreamState.CONNECTED) {
+            aacStreamer.queuePcm(chunk)
+        }
+    }
+    val isMicActive = micManager.isRecording
 
     // Queue of synthesized clips for user review
     private val _synthesizedClips = MutableStateFlow<List<SynthesizedClip>>(emptyList())
@@ -132,7 +141,8 @@ class RadioViewModel(
                     engine = settings.ttsEngine,
                     voiceName = settings.geminiVoice,
                     pitch = _pitch.value,
-                    speed = _speed.value
+                    speed = _speed.value,
+                    geminiApiKey = settings.geminiApiKey
                 )
             } finally {
                 try {
@@ -281,7 +291,8 @@ class RadioViewModel(
                 engine = settings.ttsEngine,
                 voiceName = settings.geminiVoice,
                 pitch = pitch.value,
-                speed = speed.value
+                speed = speed.value,
+                geminiApiKey = settings.geminiApiKey
             )
             return
         }
@@ -293,7 +304,8 @@ class RadioViewModel(
             voiceName = settings.geminiVoice,
             pitch = _pitch.value,
             speed = _speed.value,
-            localMonitor = settings.localVoiceMonitor
+            localMonitor = settings.localVoiceMonitor,
+            geminiApiKey = settings.geminiApiKey
         )
     }
 
@@ -327,8 +339,26 @@ class RadioViewModel(
     }
 
     fun disconnectStream() {
+        micManager.stopRecording()
         aacStreamer.disconnect()
         stopLiveNetworkMonitor()
+    }
+
+    fun checkRecordPermission(): Boolean {
+        return micManager.hasRecordPermission()
+    }
+
+    fun toggleMicStream(): Boolean {
+        if (micManager.isRecording.value) {
+            micManager.stopRecording()
+            return true
+        } else {
+            if (streamState.value != StreamState.CONNECTED) {
+                Log.w(TAG, "Cannot start live microphone when not connected to streaming server")
+                return false
+            }
+            return micManager.startRecording()
+        }
     }
 
     // Configuration CRUD
